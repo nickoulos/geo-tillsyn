@@ -62,17 +62,42 @@ curl "https://karta.sundsvall.se/geoserver/ows?service=WMS&request=GetCapabiliti
 curl "https://karta.sundsvall.se/geoserver/ows?service=WFS&version=2.0.0&request=GetFeature&typeNames=Lansstyrelsen:Strandskydd_yta&count=1&outputFormat=application/json"
 ```
 
-## 2. Not yet verified (pending)
+## 2. Procurement Q&A id 150436 (answered 2026-07-02) — binding clarifications
+
+- **F1 Lantmäteriet credentials for `suns0011`: RECEIVED.** Stored in local
+  `.env` (gitignored) — never commit, never paste in repo docs.
+- **F2 GeoServer `karta.sundsvall.se` is open during prototyping** — confirms
+  our live verification above is legitimate.
+- **F3 No real/anonymised historical cases at this stage** — synthetic
+  scenarios are the only path (as planned).
+- **F4 ByggR example exports:** "återkommer" (pending from kommun). Align
+  `mcp-bygglov` mock schema when received.
+- **F5 MapSpace: the kommun provides THEIR API key** — chase delivery, don't
+  procure our own.
+- **F7 `Strandskydd_yta` already contains the buffer zones as geometry** — we
+  do NOT compute 100/300 m buffers from the shoreline ourselves.
+- **F8 LLM provider: free choice in the prototype phase as long as data stays
+  within the EU**; no on-prem requirement at this stage (no personal data in
+  the demo/PoC).
+- **F9 ⚠ DEMO-CRITICAL: the kommun provides testfastigheter, delivered AFTER
+  bid submission.** The prototype must run on properties we have never seen —
+  generalisation within Sundsvall data is a hard requirement, curated-only
+  demos won't survive. (We can still pre-run the pipeline on their properties
+  between delivery and the demo.)
+- **F10 Frontend framework is free** (SvelteKit not required; React fine) —
+  relevant for panel UI choices outside the Origo plugin core.
+
+## 3. Not yet verified (pending)
 
 | Source | Status | Action |
 | --- | --- | --- |
-| Lantmäteriet direct APIs (STAC ortofoto download, Belägenhetsadress, Byggnad vektor) | Needs account `suns0011` credentials | Orestis — Sprint 0/1 |
-| MapSpace snedbilder (actual oblique images) | Needs API key | Request sent? — Nikos, Sprint 0 |
+| Lantmäteriet direct APIs (STAC ortofoto download, Belägenhetsadress, Byggnad vektor) | Credentials in local `.env` — untested | Live test — Orestis, Sprint 1 |
+| MapSpace snedbilder (actual oblique images) | Kommun provides their key (F5) | Chase delivery — Nikos |
+| ByggR example exports for mock schema | Kommun "återkommer" (F4) | Watch e-Avrop; align mcp-bygglov schema on arrival |
 | NGP Detaljplaner (national platform) | Needs consumer account; coverage incomplete anyway | Low priority — RIGES layers above cover the demo need |
 | Scanned plan PDFs | URL pattern known: `https://karta.sundsvall.se/Detaljplan/SkannadHandling/2281K-DP-294.pdf` | Verify a handful of plan IDs when picking demo properties |
-| Kommunens testärenden (mock bygglov cases promised by beställaren) | Not received | Ask in next kontakt with Sundsvall |
 
-## 3. Consequences for the sprint plan
+## 4. Consequences for the sprint plan
 
 1. **Sprint 1 Spike C is de-risked**: property/building/strandskydd/detaljplan vectors AND the full orthophoto timeline are reachable through ONE open endpoint. No credential blockers for the vertical slice.
 2. **1975 orthophotos are grayscale, lower quality** (verified visually) → confirms the design decision: blink comparator + human confirmation for old years; automated delta only on modern colour years.
