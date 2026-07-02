@@ -10,7 +10,7 @@ Base endpoint: `https://karta.sundsvall.se/geoserver/ows`
 ### WFS layers verified present (GetCapabilities) and retrievable (GetFeature)
 
 | Purpose | Layer | Notes |
-|---|---|---|
+| --- | --- | --- |
 | Property polygons | `SundsvallsKommun:Fastighet_yta` | **Better than boundary lines for click-to-select.** GetFeature returns MultiPolygon. |
 | Property boundaries | `SundsvallsKommun:FastighetGrans_linje` | As listed in tender xlsx |
 | Property designations | `SundsvallsKommun:FastighetBeteckning_punkt`, `FastighetBeteckningFullstandig_punkt` | For labels/search |
@@ -47,6 +47,13 @@ curl "https://karta.sundsvall.se/geoserver/ows?service=WMS&version=1.3.0&request
 
 Layers declare mixed DefaultCRS: **EPSG:3006** (SWEREF99 TM), **EPSG:3013**, **EPSG:3014** (SWEREF99 17 15 — local zone for Sundsvall, false easting 150000). GetFeature on `Fastighet_yta` and `Strandskydd_yta` returned coordinates consistent with EPSG:3014 (x≈150 000, y≈6.91M, axis order northing,easting in WFS 2.0). **Rule: always request an explicit `srsName`/`crs` per call; normalise everything to EPSG:3006 internally.**
 
+### ⚠ Spatial filter limitation (verified 2026-07-02)
+
+CQL `INTERSECTS`/`DWITHIN` on this GeoServer **silently match nothing** (0 hits
+even for an all-of-Sweden polygon). Use `BBOX(...)` CQL filters and **WMS
+GetFeatureInfo** for point-in-polygon instead — full pattern and design
+consequences in [data-findings.md](data-findings.md) §1.
+
 ### Reproduce the capability check
 
 ```bash
@@ -58,7 +65,7 @@ curl "https://karta.sundsvall.se/geoserver/ows?service=WFS&version=2.0.0&request
 ## 2. Not yet verified (pending)
 
 | Source | Status | Action |
-|---|---|---|
+| --- | --- | --- |
 | Lantmäteriet direct APIs (STAC ortofoto download, Belägenhetsadress, Byggnad vektor) | Needs account `suns0011` credentials | Orestis — Sprint 0/1 |
 | MapSpace snedbilder (actual oblique images) | Needs API key | Request sent? — Nikos, Sprint 0 |
 | NGP Detaljplaner (national platform) | Needs consumer account; coverage incomplete anyway | Low priority — RIGES layers above cover the demo need |

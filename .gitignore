@@ -22,6 +22,9 @@ data/cache/
 *.tif
 *.tiff
 
+# Spike outputs (regenerate by running the spike scripts)
+spikes/**/out/
+
 # OS / editor
 .DS_Store
 Thumbs.db

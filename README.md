@@ -1,6 +1,6 @@
 # Geo-Tillsyn
 
-**Prototyp för Govtech4all Pilot 3 — AI och geodata (Sundsvalls kommun, UH-2026-159)**
+Prototyp för Govtech4all Pilot 3 — AI och geodata (Sundsvalls kommun, UH-2026-159).
 
 Geo-Tillsyn är en handläggar-copilot för tillsynsärenden enligt PBL. Lösningen sammanställer geodata, bygglovshistorik och tillämplig lagstiftning för ett valt objekt och producerar ett transparent, citerbart beslutsunderlag — för handläggaren och för berörd part.
 
@@ -8,7 +8,7 @@ Kärnidén: alla tillsynsärenden är samma fråga — **Verklighet vs. Rättigh
 
 ## Arkitektur
 
-```
+```text
 Origo-plugin (karta + tidslinje + dossier)
         │
 Eneo-assistent "Geo-Tillsyn"  (resonemang via regelgraf)
@@ -27,7 +27,7 @@ GeoServer (karta.sundsvall.se), Lantmäteriet, Länsstyrelsen
 ## Struktur
 
 | Katalog | Innehåll |
-|---|---|
+| --- | --- |
 | `mcp/` | MCP-servrar, en per datakälla |
 | `regelgraf/` | Juridiska beslutsträd per ärendeslag (YAML) + motor |
 | `origo-plugin/` | Handläggargränssnitt (tidslinje, dossier, regelgraf-vy) |
