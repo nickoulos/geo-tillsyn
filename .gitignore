@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Env & secrets
+.env
+.env.*
+*.key
+
+# Data caches (fetched imagery etc.)
+data/cache/
+*.tif
+*.tiff
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
