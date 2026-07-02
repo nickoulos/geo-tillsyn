@@ -1,0 +1,17 @@
+{
+  "name": "geotillsyn-plugin",
+  "version": "0.1.0",
+  "description": "Geo-Tillsyn Origo plugin (Govtech4all Pilot 3 prototype)",
+  "main": "src/geotillsyn.js",
+  "scripts": {
+    "start": "webpack-dev-server --config ./tasks/webpack.dev.js --mode development",
+    "build": "webpack --config ./tasks/webpack.prod.js"
+  },
+  "license": "AGPL-3.0-or-later",
+  "devDependencies": {
+    "webpack": "^5.94.0",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^5.1.0",
+    "webpack-merge": "^6.0.1"
+  }
+}
