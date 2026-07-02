@@ -16,7 +16,7 @@
       "options": {
         "buttonText": "Om Geo-Tillsyn",
         "title": "Geo-Tillsyn — demo",
-        "content": "<p>Prototyp för Govtech4all Pilot 3 (Sundsvalls kommun). Klicka på sökknappen i verktygsfältet och sedan på en fastighet för att identifiera den via GetFeatureInfo mot karta.sundsvall.se.</p>"
+        "content": "<p>Prototyp för Govtech4all Pilot 3 (Sundsvalls kommun). Dra i tidslinjen längst ner för att byta ortofoto-årgång och se vilket regelverk som gällde. Klicka på sökknappen och sedan på en fastighet för att identifiera den.</p>"
       }
     }
   ],
@@ -41,40 +41,27 @@
     "sundsvall": { "url": "https://karta.sundsvall.se/geoserver/ows" }
   },
   "groups": [
-    { "name": "background", "title": "Bakgrundskartor", "expanded": true },
     { "name": "tillsyn", "title": "Tillsynslager", "expanded": true }
   ],
   "layers": [
-    {
-      "name": "Lantmateriet:Orto2023_wms",
-      "title": "Ortofoto 2023",
-      "group": "background",
-      "source": "sundsvall",
-      "type": "WMS",
-      "style": "thumb-2023",
-      "queryable": false,
-      "visible": true
-    },
-    {
-      "name": "Lantmateriet:Orto2011_wms",
-      "title": "Ortofoto 2011",
-      "group": "background",
-      "source": "sundsvall",
-      "type": "WMS",
-      "style": "thumb-2011",
-      "queryable": false,
-      "visible": false
-    },
-    {
-      "name": "Lantmateriet:HistoriskaOrtofoton1975_wms",
-      "title": "Historiskt ortofoto 1975",
-      "group": "background",
-      "source": "sundsvall",
-      "type": "WMS",
-      "style": "thumb-1975",
-      "queryable": false,
-      "visible": false
-    },
+    { "name": "Lantmateriet:HistoriskaOrtofoton1960_wms", "title": "Ortofoto 1960", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:HistoriskaOrtofoton1975_wms", "title": "Ortofoto 1975", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:HistoriskaOrtofoton1998_wms", "title": "Ortofoto 1998", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:HistoriskaOrtofoton1999_wms", "title": "Ortofoto 1999", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:HistoriskaOrtofoton2001_wms", "title": "Ortofoto 2001", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:HistoriskaOrtofoton2002_wms", "title": "Ortofoto 2002", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:Orto2007_wms", "title": "Ortofoto 2007", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:Orto2010_wms", "title": "Ortofoto 2010", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:Orto2011_wms", "title": "Ortofoto 2011", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:Orto2012_wms", "title": "Ortofoto 2012", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:Orto2013_wms", "title": "Ortofoto 2013", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:Orto2015_wms", "title": "Ortofoto 2015", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:Orto2016_wms", "title": "Ortofoto 2016", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:Orto2017_wms", "title": "Ortofoto 2017", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:Orto2019_wms", "title": "Ortofoto 2019", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:Orto2020_wms", "title": "Ortofoto 2020", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:Orto2021_wms", "title": "Ortofoto 2021", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": false },
+    { "name": "Lantmateriet:Orto2023_wms", "title": "Ortofoto 2023", "group": "none", "source": "sundsvall", "type": "WMS", "queryable": false, "visible": true },
     {
       "name": "Lansstyrelsen:Strandskydd_yta",
       "title": "Strandskydd",
@@ -94,34 +81,5 @@
       "queryable": false,
       "visible": true
     }
-  ],
-  "styles": {
-    "thumb-2023": [
-      [
-        {
-          "image": {
-            "src": "https://karta.sundsvall.se/geoserver/ows?service=WMS&version=1.3.0&request=GetMap&layers=Lantmateriet:Orto2023_wms&crs=EPSG:3006&bbox=6917530,624126,6918330,624926&width=64&height=64&format=image/png"
-          }
-        }
-      ]
-    ],
-    "thumb-2011": [
-      [
-        {
-          "image": {
-            "src": "https://karta.sundsvall.se/geoserver/ows?service=WMS&version=1.3.0&request=GetMap&layers=Lantmateriet:Orto2011_wms&crs=EPSG:3006&bbox=6917530,624126,6918330,624926&width=64&height=64&format=image/png"
-          }
-        }
-      ]
-    ],
-    "thumb-1975": [
-      [
-        {
-          "image": {
-            "src": "https://karta.sundsvall.se/geoserver/ows?service=WMS&version=1.3.0&request=GetMap&layers=Lantmateriet:HistoriskaOrtofoton1975_wms&crs=EPSG:3006&bbox=6917530,624126,6918330,624926&width=64&height=64&format=image/png"
-          }
-        }
-      ]
-    ]
-  }
+  ]
 }
