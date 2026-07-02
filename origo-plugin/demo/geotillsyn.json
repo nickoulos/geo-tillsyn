@@ -1,0 +1,95 @@
+{
+  "controls": [
+    { "name": "home", "options": { "zoomOnStart": false } },
+    { "name": "mapmenu", "options": { "isActive": false } },
+    { "name": "legend", "options": { "labelOpacitySlider": "Opacitet", "useGroupIndication": true } },
+    {
+      "name": "position",
+      "options": {
+        "title": "SWEREF99 TM",
+        "projections": { "EPSG:4326": "WGS84" }
+      }
+    },
+    { "name": "measure" },
+    {
+      "name": "about",
+      "options": {
+        "buttonText": "Om Geo-Tillsyn",
+        "title": "Geo-Tillsyn — demo",
+        "content": "<p>Prototyp för Govtech4all Pilot 3 (Sundsvalls kommun). Klicka på sökknappen i verktygsfältet och sedan på en fastighet för att identifiera den via GetFeatureInfo mot karta.sundsvall.se.</p>"
+      }
+    }
+  ],
+  "pageSettings": {
+    "footer": { "text": "Geo-Tillsyn (prototyp) — data: Sundsvalls kommun, Lantmäteriet, Länsstyrelsen" },
+    "mapGrid": { "visible": false }
+  },
+  "projectionCode": "EPSG:3006",
+  "proj4Defs": [
+    {
+      "code": "EPSG:3006",
+      "projection": "+proj=utm +zone=33 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
+    }
+  ],
+  "projectionExtent": [181896, 6101648, 1086313, 7689478],
+  "extent": [540000, 6840000, 720000, 6990000],
+  "center": [624526, 6917930],
+  "zoom": 11,
+  "resolutions": [4096, 2048, 1024, 512, 256, 128, 64, 32, 16, 8, 4, 2, 1, 0.5, 0.25],
+  "featureinfoOptions": { "infowindow": "overlay" },
+  "source": {
+    "sundsvall": { "url": "https://karta.sundsvall.se/geoserver/ows" }
+  },
+  "groups": [
+    { "name": "background", "title": "Bakgrundskartor", "expanded": true },
+    { "name": "tillsyn", "title": "Tillsynslager", "expanded": true }
+  ],
+  "layers": [
+    {
+      "name": "Lantmateriet:Orto2023_wms",
+      "title": "Ortofoto 2023",
+      "group": "background",
+      "source": "sundsvall",
+      "type": "WMS",
+      "queryable": false,
+      "visible": true
+    },
+    {
+      "name": "Lantmateriet:Orto2011_wms",
+      "title": "Ortofoto 2011",
+      "group": "background",
+      "source": "sundsvall",
+      "type": "WMS",
+      "queryable": false,
+      "visible": false
+    },
+    {
+      "name": "Lantmateriet:HistoriskaOrtofoton1975_wms",
+      "title": "Historiskt ortofoto 1975",
+      "group": "background",
+      "source": "sundsvall",
+      "type": "WMS",
+      "queryable": false,
+      "visible": false
+    },
+    {
+      "name": "Lansstyrelsen:Strandskydd_yta",
+      "title": "Strandskydd",
+      "group": "tillsyn",
+      "source": "sundsvall",
+      "type": "WMS",
+      "opacity": 0.35,
+      "queryable": false,
+      "visible": true
+    },
+    {
+      "name": "SundsvallsKommun:FastighetGrans_linje",
+      "title": "Fastighetsgränser",
+      "group": "tillsyn",
+      "source": "sundsvall",
+      "type": "WMS",
+      "queryable": false,
+      "visible": true
+    }
+  ]
+}
