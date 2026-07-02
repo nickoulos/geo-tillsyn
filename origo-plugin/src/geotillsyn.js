@@ -47,6 +47,13 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     return `${owsUrl}?${params.toString()}`;
   }
 
+  // WMS responses are untrusted input; modal content is rendered as HTML.
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (ch) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+  }
+
   async function identify(evt) {
     const crsCode = viewer.getProjection().getCode();
     const url = buildGetFeatureInfoUrl(evt.coordinate, crsCode);
@@ -56,10 +63,11 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       const json = await resp.json();
       const feat = json.features && json.features[0];
       content = feat
-        ? `<b>Fastighet:</b> ${feat.properties[fbetProperty] || '(saknar beteckning)'}`
+        ? `<b>Fastighet:</b> ${escapeHtml(feat.properties[fbetProperty] || '(saknar beteckning)')}`
         : 'Ingen fastighet på denna punkt.';
     } catch (err) {
-      content = `Fel vid hämtning: ${err.message}`;
+      console.error('geotillsyn: GetFeatureInfo failed', err);
+      content = 'Fel vid hämtning.';
     }
     const modal = Origo.ui.Modal({
       title: 'Geo-Tillsyn',
