@@ -1,0 +1,71 @@
+{
+  "_kommentar": "Förenklad, versionerad regelmodell för prototypen. Datum = ikraftträdanden. SKA juridikgranskas i Sprint 3 innan demo — se README.",
+  "pbl_versioner": [
+    {
+      "namn": "Byggnadslagen/byggnadsstadgan",
+      "sfs": "1947:385 / 1959:612",
+      "fran": "1948-01-01",
+      "till": "1987-06-30",
+      "tillsyn_lagrum": "BL/BS"
+    },
+    {
+      "namn": "Äldre plan- och bygglagen (ÄPBL)",
+      "sfs": "1987:10",
+      "fran": "1987-07-01",
+      "till": "2011-05-01",
+      "tillsyn_lagrum": "10 kap. ÄPBL"
+    },
+    {
+      "namn": "Plan- och bygglagen",
+      "sfs": "2010:900",
+      "fran": "2011-05-02",
+      "till": null,
+      "tillsyn_lagrum": "11 kap. PBL"
+    }
+  ],
+  "lovbefrielser": [
+    {
+      "namn": "friggebod",
+      "fran": "1979-07-01",
+      "till": "2007-12-31",
+      "max_kvm": 10,
+      "lagrum": "35 § byggnadsstadgan / 8 kap. 4 § ÄPBL"
+    },
+    {
+      "namn": "friggebod",
+      "fran": "2008-01-01",
+      "till": null,
+      "max_kvm": 15,
+      "lagrum": "PBL 9 kap. 4 §"
+    },
+    {
+      "namn": "attefallshus",
+      "fran": "2014-07-02",
+      "till": "2020-02-29",
+      "max_kvm": 25,
+      "lagrum": "PBL 9 kap. 4a §",
+      "kraver_anmalan": true
+    },
+    {
+      "namn": "attefallshus",
+      "fran": "2020-03-01",
+      "till": null,
+      "max_kvm": 30,
+      "lagrum": "PBL 9 kap. 4a §",
+      "kraver_anmalan": true
+    }
+  ],
+  "strandskydd": {
+    "generellt_fran": "1975-07-01",
+    "lagrum": "MB 7 kap. 13-18h §§ (tidigare naturvårdslagen)",
+    "dispens_lagrum": "MB 7 kap. 18b-18c §§"
+  },
+  "preskription": {
+    "pbl_tioarsregel": { "ar": 10, "lagrum": "PBL 11 kap. 20 § 2 st" },
+    "byggsanktionsavgift": { "ar": 5, "lagrum": "PBL 11 kap. 58 §" },
+    "strandskydd": {
+      "preskriberas": false,
+      "kommentar": "Tillsynsföreläggande enligt MB har ingen tioårsgräns"
+    }
+  }
+}
