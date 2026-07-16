@@ -25,6 +25,9 @@ data/cache/
 # Spike outputs (regenerate by running the spike scripts)
 spikes/**/out/
 
+# Fall 7 CLI output (regenerate: geo-tillsyn <E> <N> --ut demo_ut/...)
+demo_ut/
+
 # OS / editor
 .DS_Store
 Thumbs.db

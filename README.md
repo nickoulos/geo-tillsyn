@@ -34,6 +34,24 @@ GeoServer (karta.sundsvall.se), Lantmäteriet, Länsstyrelsen
 | `dossier/` | Mallar: juridisk + klarspråksversion |
 | `data/synthetic/` | Syntetiska testdata (inga verkliga personuppgifter) |
 | `docs/adr/` | Arkitekturbeslut |
+| `src/geo_tillsyn/` | Körbar Fall 7-skiva: analys, dossier, tidslinje (se nedan) |
+| `tests/` | Hermetisk testsvit för skivan (pytest, inga nätverksanrop) |
+
+## Körbar skiva — Fall 7 strandskydd
+
+```sh
+.venv/Scripts/pip install -e .[dev] -e ../mcp-ogc
+.venv/Scripts/geo-tillsyn 158140.4 6918389.3 --radie 120 --ut demo_ut/alno-usland-1-45
+```
+
+Punkt (EPSG:3014, kommunlagrens native CRS) → byggnader (`bal_byggnad_yta`) korsas med
+strandskyddszoner (`lm_strandskydd_y`, med lm_aktbeteckning som källreferens) → `dossier.md`
+i tre nivåer — **Fakta** (klickbar källa per påstående), **Bedömning** (grund + »Ej fastställt«),
+**Beslut** (alltid tomt; handläggarens) — plus ortofoto-tidslinje 1960–2023 som PNG.
+
+Otillgängliga regelkällor (t.ex. `Lansstyrelsen:UtvidgatStrandskydd_yta`, trasig server-side
+2026-07-17) prövas varje körning och redovisas som osäkerhet — aldrig tyst. Tomma
+WMS-svar (täckningsglapp per årgång) flaggas »misstänkt tom bild«.
 
 ## Status
 
