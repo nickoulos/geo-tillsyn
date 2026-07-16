@@ -49,6 +49,55 @@ def _lovbefrielser(datum):
     return [r for r in _REGLER["lovbefrielser"] if _within(r, datum)]
 
 
+def _samlad_area_pott(datum, kontext):
+    """Post-2025-12-01 the exemption is a combined area pot per fastighet.
+
+    Returns None before the reform, where exemptions were per building type.
+    """
+    pott = _REGLER["samlad_area_pott"]
+    if datum < _d(pott["fran"]):
+        return None
+    zon = "inom_detaljplan" if kontext.inom_detaljplan else "utom_detaljplan"
+    return {
+        **pott[zon],
+        "zon": zon,
+        "sfs": pott["sfs"],
+        "forarbeten": pott["forarbeten"],
+        "kalla": pott["kalla"],
+    }
+
+
+def _overgangsbestammelser(datum, arende_startdatum):
+    """Which law applies is driven by when the ärende began, not by `datum`.
+
+    PBL 2010:900 p. 2 keeps the repealed ÄPBL alive for ärenden started before
+    2011-05-02 until finally decided — see docs/legal-findings.md §4.1. When the
+    caller supplies `arende_startdatum` we route on it; otherwise we warn if
+    `datum` falls close enough to a transition for this to matter.
+    """
+    for ob in _REGLER["overgangsbestammelser"]:
+        ikraft = _d(ob["ikrafttradande"])
+        if arende_startdatum and arende_startdatum < ikraft <= datum:
+            return {
+                "gäller": True,
+                "tillampad_pga_arendestart": True,
+                "aldre_sfs": ob["aldre_sfs"],
+                "ikrafttradande": ob["ikrafttradande"],
+                "kommentar": ob["kommentar"],
+            }
+        fonster = timedelta(days=365 * ob["varningsfonster_ar"])
+        if ikraft <= datum < ikraft + fonster and not arende_startdatum:
+            return {
+                "gäller": True,
+                "tillampad_pga_arendestart": False,
+                "aldre_sfs": ob["aldre_sfs"],
+                "ikrafttradande": ob["ikrafttradande"],
+                "kommentar": ob["kommentar"],
+                "atgard": "Ange ärendets startdatum — datum ensamt avgör inte vilken lag som gäller.",
+            }
+    return {"gäller": False, "tillampad_pga_arendestart": False}
+
+
 def _strandskydd(datum, kontext):
     ss = _REGLER["strandskydd"]
     inom_zon = kontext.inom_strandskydd or kontext.inom_utvidgat_strandskydd
@@ -80,18 +129,28 @@ def _preskription(datum, bedomningsdatum):
     }
 
 
-def regelverk_vid(datum, kontext=None, bedomningsdatum=None):
+def regelverk_vid(datum, kontext=None, bedomningsdatum=None, arende_startdatum=None):
     """Return the legal regime in force at `datum` for a point with `kontext`.
 
     `bedomningsdatum` (default: today) drives the preskription assessment.
+    `arende_startdatum` — when the ärende began. If it predates a transition,
+    the older law governs (PBL 2010:900 p. 2); pass it whenever it is known.
     """
     datum = _d(datum)
     kontext = kontext or Kontext()
     bedomningsdatum = _d(bedomningsdatum) if bedomningsdatum else date.today()
+    arende_startdatum = _d(arende_startdatum) if arende_startdatum else None
+
+    overgang = _overgangsbestammelser(datum, arende_startdatum)
+    # An ärende started before a transition is judged by the law in force then.
+    rattsdatum = arende_startdatum if overgang["tillampad_pga_arendestart"] else datum
+
     return {
         "datum": datum.isoformat(),
-        "pbl_version": _pbl_version(datum),
-        "lovbefrielser": _lovbefrielser(datum),
+        "pbl_version": _pbl_version(rattsdatum),
+        "lovbefrielser": _lovbefrielser(rattsdatum),
+        "samlad_area_pott": _samlad_area_pott(rattsdatum, kontext),
         "strandskydd": _strandskydd(datum, kontext),
         "preskription": _preskription(datum, bedomningsdatum),
+        "overgangsbestammelser": overgang,
     }

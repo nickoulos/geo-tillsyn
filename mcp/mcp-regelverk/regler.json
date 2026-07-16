@@ -34,7 +34,7 @@
     {
       "namn": "friggebod",
       "fran": "2008-01-01",
-      "till": null,
+      "till": "2025-11-30",
       "max_kvm": 15,
       "lagrum": "PBL 9 kap. 4 §"
     },
@@ -49,10 +49,60 @@
     {
       "namn": "attefallshus",
       "fran": "2020-03-01",
-      "till": null,
+      "till": "2025-11-30",
       "max_kvm": 30,
       "lagrum": "PBL 9 kap. 4a §",
       "kraver_anmalan": true
+    },
+    {
+      "namn": "komplementbostadshus",
+      "fran": "2025-12-01",
+      "till": null,
+      "max_kvm": 30,
+      "max_kvm_utom_detaljplan": 50,
+      "lagrum": "PBL 9 kap. (SFS 2025:975)",
+      "kraver_anmalan": true,
+      "kommentar": "Termerna friggebod/attefallshus avskaffade 2025-12-01. Area ingår i samlad pott — se samlad_area_pott."
+    },
+    {
+      "namn": "komplementbyggnad",
+      "fran": "2025-12-01",
+      "till": null,
+      "max_kvm": 30,
+      "max_kvm_utom_detaljplan": 50,
+      "lagrum": "PBL 9 kap. (SFS 2025:975)",
+      "kraver_anmalan": true,
+      "kommentar": "Ersätter friggebod. Area ingår i samlad pott — se samlad_area_pott."
+    }
+  ],
+  "samlad_area_pott": {
+    "_kommentar": "2025-12-01-reformen: bygglovsbefrielsen är en gemensam area-pott per fastighet, inte per byggnadstyp. SKA verifieras mot lagtext (prop. 2024/25:169) före demo.",
+    "fran": "2025-12-01",
+    "inom_detaljplan": { "max_kvm_totalt": 45, "bygglov_kravs_over_kvm_per_byggnad": 30 },
+    "utom_detaljplan": { "max_kvm_totalt": 65, "bygglov_kravs_over_kvm_per_byggnad": 50 },
+    "sfs": "2025:974 / 2025:975",
+    "forarbeten": "prop. 2024/25:169",
+    "overgangsbestammelser_till": "2027-11-30",
+    "kalla": "https://www.boverket.se/sv/samhallsplanering/uppdrag/avslutade-uppdrag/nytt-regelverk-for-bygglov/lista-pbl--andringar/"
+  },
+  "overgangsbestammelser": [
+    {
+      "_kommentar": "PBL 2010:900 p. 2 (verbatim, rkrattsdb.gov.se/SFSdoc/10/100900.PDF s. 72-73): 'Äldre föreskrifter ska fortfarande gälla för mål och ärenden som har påbörjats före den 2 maj 2011 ... till dess målet eller ärendet är slutligt avgjort.'",
+      "overgang": "ÄPBL → PBL",
+      "ikrafttradande": "2011-05-02",
+      "aldre_sfs": "1987:10",
+      "styrs_av": "arende_startdatum",
+      "varningsfonster_ar": 3,
+      "kommentar": "Ärenden påbörjade före 2011-05-02 prövas enligt ÄPBL (1987:10) till dess de är slutligt avgjorda — även långt efter ikraftträdandet. Datum ensamt avgör inte."
+    },
+    {
+      "_kommentar": "SFS 2025:974/975. Övergångsbestämmelser för vissa planbestämmelser löper till slutet av nov 2027.",
+      "overgang": "attefall/friggebod → samlad pott",
+      "ikrafttradande": "2025-12-01",
+      "aldre_sfs": "2010:900 (9 kap. 4, 4a §§)",
+      "styrs_av": "arende_startdatum",
+      "varningsfonster_ar": 3,
+      "kommentar": "Ansökningar/anmälningar påbörjade före 2025-12-01 kan prövas enligt äldre lydelse. Vissa planbestämmelser har övergångsregler till 2027-11-30."
     }
   ],
   "strandskydd": {
