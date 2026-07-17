@@ -48,31 +48,14 @@ def _getfeature_url(ows_url: str, type_name: str, bbox: tuple) -> str:
     return f"{ows_url}?{urlencode(params)}"
 
 
-def kor_fall7(
+def _hamta_underlag(
     ows_url: str,
     punkt: tuple[float, float],
     radie_m: float,
-    ut_katalog: Path,
     nu: str,
-    ar: list[int] | None = None,
-    hamta_wfs: Callable = query_wfs_features,
-    hamta_wms: Callable | None = None,
-) -> Path:
-    """Run the Fall 7 slice around a point and write dossier.md + tidslinje PNGs.
-
-    Args:
-        ows_url: GeoServer OWS endpoint.
-        punkt: (easting, northing) in EPSG:3014 — the handläggare's map click.
-        radie_m: Half-side of the square search box around the point, metres.
-        ut_katalog: Output directory (created if missing).
-        nu: ISO timestamp stamped on every källa (injected: scripts stay
-            deterministic and testable).
-        ar: Ortofoto years for the tidslinje (default: all 18 verified).
-        hamta_wfs / hamta_wms: Fetchers, injectable for tests.
-
-    Returns:
-        Path to the written dossier.md.
-    """
+    hamta_wfs: Callable,
+):
+    """Fetch + analyse everything both the dossier and the MCP tools need."""
     e, n = punkt
     bbox = (e - radie_m, n - radie_m, e + radie_m, n + radie_m)
 
@@ -106,6 +89,105 @@ def kor_fall7(
         for analys in analyser
         if analys.laege in ("inom", "delvis")
     }
+    return bbox, byggnader, analyser, juridik, osakerheter
+
+
+# Eneo's MCP client truncates tool output at 8 kB — cap the per-building list
+# and declare the truncation (docs/spike-a-eneo-findings.md). 15 keeps a real
+# response under the cap (measured live: 27 träffar serialised to 12.3 kB).
+_MAX_TRAFFAR_I_SVAR = 15
+
+
+def analysera_punkt(
+    ows_url: str,
+    punkt: tuple[float, float],
+    radie_m: float,
+    nu: str,
+    hamta_wfs: Callable = query_wfs_features,
+) -> dict:
+    """Compact, MCP-friendly strandskydd analysis around a point.
+
+    Returns plain JSON-serialisable data: per-building läge + time-aware legal
+    position, declared uncertainties and källa URLs. Never geometry, never
+    imagery — references only.
+    """
+    bbox, byggnader, analyser, juridik, osakerheter = _hamta_underlag(
+        ows_url, punkt, radie_m, nu, hamta_wfs
+    )
+
+    traff_analyser = [a for a in analyser if a.laege in ("inom", "delvis")]
+    traffar = []
+    for analys in traff_analyser[:_MAX_TRAFFAR_I_SVAR]:
+        lage = juridik[analys.byggnad_id]
+        traff = {
+            "byggnad_id": analys.byggnad_id,
+            "laege": analys.laege,
+            "zon_referenser": analys.zon_referenser,
+            "byggnads_ar": lage.byggnads_ar,
+            "gallde_vid_uppforande": lage.gallde_vid_uppforande,
+            "dispens_kravs_idag": lage.dispens_kravs_idag,
+            "preskriberas": lage.preskriberas,
+        }
+        if analys.laege == "delvis":
+            traff["andel_inom"] = round(analys.andel_inom, 2)
+        if lage.atgarder:
+            traff["atgarder"] = lage.atgarder
+        traffar.append(traff)
+
+    resultat = {
+        "punkt": {"easting": punkt[0], "northing": punkt[1], "crs": CRS},
+        "radie_m": radie_m,
+        "antal_byggnader": len(analyser),
+        "antal_traffar": len(traff_analyser),
+        "antal_utanfor": len(analyser) - len(traff_analyser),
+        "traffar": traffar,
+        "juridisk_not": (
+            "Ingen preskription för strandskyddstillsyn (MÖD 2021:6); "
+            "skälighetsbedömning enligt MÖD 2017:16 är handläggarens. "
+            "Systemet gör en bedömning — beslutet fattas av handläggaren."
+        ),
+        "osakerheter": osakerheter,
+        "kallor": [
+            {"beskrivning": f"{BYGGNAD_LAYER} (WFS)", "url": _getfeature_url(ows_url, BYGGNAD_LAYER, bbox)},
+            {"beskrivning": f"{STRANDSKYDD_LAYER} (WFS)", "url": _getfeature_url(ows_url, STRANDSKYDD_LAYER, bbox)},
+            {"beskrivning": "Miljöbalken 7 kap. (SFS 1998:808)", "url": REGELVERK_KALLA_URL},
+        ],
+        "hamtad": nu,
+    }
+    if len(traff_analyser) > _MAX_TRAFFAR_I_SVAR:
+        resultat["traffar_trunkerade_till"] = _MAX_TRAFFAR_I_SVAR
+    return resultat
+
+
+def kor_fall7(
+    ows_url: str,
+    punkt: tuple[float, float],
+    radie_m: float,
+    ut_katalog: Path,
+    nu: str,
+    ar: list[int] | None = None,
+    hamta_wfs: Callable = query_wfs_features,
+    hamta_wms: Callable | None = None,
+) -> Path:
+    """Run the Fall 7 slice around a point and write dossier.md + tidslinje PNGs.
+
+    Args:
+        ows_url: GeoServer OWS endpoint.
+        punkt: (easting, northing) in EPSG:3014 — the handläggare's map click.
+        radie_m: Half-side of the square search box around the point, metres.
+        ut_katalog: Output directory (created if missing).
+        nu: ISO timestamp stamped on every källa (injected: scripts stay
+            deterministic and testable).
+        ar: Ortofoto years for the tidslinje (default: all 18 verified).
+        hamta_wfs / hamta_wms: Fetchers, injectable for tests.
+
+    Returns:
+        Path to the written dossier.md.
+    """
+    bbox, _byggnader, analyser, juridik, osakerheter = _hamta_underlag(
+        ows_url, punkt, radie_m, nu, hamta_wfs
+    )
+    e, n = punkt
 
     dossier = bygg_dossier(
         rubrik=(
