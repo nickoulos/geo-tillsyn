@@ -1,0 +1,24 @@
+# A-live overlay for eneo's docker-compose.e2e.yml: swaps the fixed-text mock
+# model for the tool-aware one and mounts this spike dir into the backend so
+# the seed script can run in-container.
+#
+# Run from the eneo repo root:
+#   docker compose -f docker-compose.e2e.yml \
+#     -f ../geo-tillsyn/spikes/spike-a-live/docker-compose.mcp-live.yml \
+#     up -d --wait
+# NB: relative paths in an overlay resolve against the PROJECT directory (the
+# first -f file's dir), not this file's dir — hence the absolute paths.
+services:
+  e2e-mock-model:
+    volumes:
+      - c:/Users/N.KOULOS/Documents/personal/4sight/Gov4tech/geo-tillsyn/spikes/spike-a-live:/spike:ro
+    command: ["python3", "/spike/mock_toolcall_server.py"]
+    environment:
+      MOCK_TOOL_ARGS: '{"easting": 158140.4, "northing": 6918389.3, "radie_m": 120}'
+      MOCK_PREFERRED_TOOL: analysera
+
+  e2e-backend:
+    volumes:
+      - c:/Users/N.KOULOS/Documents/personal/4sight/Gov4tech/geo-tillsyn/spikes/spike-a-live:/spike:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

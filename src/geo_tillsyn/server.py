@@ -14,12 +14,28 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from geo_tillsyn.runner import analysera_punkt, kor_fall7
 
 SUNDSVALL_OWS = "https://karta.sundsvall.se/geoserver/ows"
 
-mcp = FastMCP("geo-tillsyn")
+# Eneo's backend runs in Docker and reaches this server via host.docker.internal;
+# FastMCP's default DNS-rebinding allowlist is localhost-only and answers such
+# requests with 421 Misdirected Request. Keep the protection, widen the allowlist.
+mcp = FastMCP(
+    "geo-tillsyn",
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*", "host.docker.internal:*"],
+        allowed_origins=[
+            "http://127.0.0.1:*",
+            "http://localhost:*",
+            "http://[::1]:*",
+            "http://host.docker.internal:*",
+        ],
+    ),
+)
 
 
 def _nu() -> str:
