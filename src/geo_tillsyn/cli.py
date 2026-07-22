@@ -9,7 +9,7 @@ import argparse
 from datetime import UTC, datetime
 from pathlib import Path
 
-from geo_tillsyn.runner import kor_fall7
+from geo_tillsyn.runner import kor_fall1, kor_fall7
 
 SUNDSVALL_OWS = "https://karta.sundsvall.se/geoserver/ows"
 
@@ -27,16 +27,35 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--ar", type=int, nargs="*", default=None, help="ortofoto-år (standard: alla 18)"
     )
+    parser.add_argument(
+        "--fall",
+        type=int,
+        choices=[7, 1],
+        default=7,
+        help="fall 7 (strandskydd, standard) eller fall 1 (olovligt byggande)",
+    )
     args = parser.parse_args(argv)
 
-    dossier = kor_fall7(
-        ows_url=args.ows,
-        punkt=(args.easting, args.northing),
-        radie_m=args.radie,
-        ut_katalog=args.ut,
-        nu=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        ar=args.ar,
-    )
+    nu = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    if args.fall == 1:
+        dossier = kor_fall1(
+            ows_url=args.ows,
+            punkt=(args.easting, args.northing),
+            ut_katalog=args.ut,
+            nu=nu,
+            radie_m=args.radie,
+            ar=args.ar,
+        )
+    else:
+        dossier = kor_fall7(
+            ows_url=args.ows,
+            punkt=(args.easting, args.northing),
+            radie_m=args.radie,
+            ut_katalog=args.ut,
+            nu=nu,
+            ar=args.ar,
+        )
     print(f"Dossier: {dossier}")
     return 0
 

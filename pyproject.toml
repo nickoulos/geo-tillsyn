@@ -9,6 +9,8 @@ authors = [{ name = "Foursight Lab" }]
 dependencies = [
     "mcp>=1.0",
     "mcp-ogc",
+    "numpy>=2.0",
+    "pillow>=10.0",
     "shapely>=2.0",
 ]
 

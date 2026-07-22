@@ -16,7 +16,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
-from geo_tillsyn.runner import analysera_punkt, kor_fall7
+from geo_tillsyn.runner import analysera_fall1_punkt, analysera_punkt, kor_fall7
 
 SUNDSVALL_OWS = "https://karta.sundsvall.se/geoserver/ows"
 
@@ -120,6 +120,37 @@ def generera_dossier(
             for fil in tidslinje
         ],
     }
+
+
+@mcp.tool()
+def analysera_olovligt_byggande_vid_punkt(
+    easting: float,
+    northing: float,
+    radie_m: float = 100.0,
+) -> dict:
+    """Analysera misstänkt olovligt byggande vid en kartpunkt (Fall 1).
+
+    Daterar närmaste byggnad via ortofoto-tidslinjen (intervall, aldrig
+    gissning), jämför mot byggnadsregistrets nybyggnadsår, bedömer
+    bygglovsplikten vid uppförandet och PBL-klockorna (11 kap. 20 §
+    rättelse-preskription, 11 kap. 58 § sanktionsavgift). Systemet gör en
+    bedömning — beslutet fattas av handläggaren.
+
+    Args:
+        easting: E-koordinat i EPSG:3014 (SWEREF99 17 15, kommunlagrens CRS).
+        northing: N-koordinat i EPSG:3014.
+        radie_m: Sökradie i meter runt punkten (standard 100).
+
+    Returns:
+        Kompakt JSON: datering, BAL-jämförelse, bygglovsplikt, PBL-klockor,
+        osäkerheter och käll-URL:er.
+    """
+    return analysera_fall1_punkt(
+        ows_url=SUNDSVALL_OWS,
+        punkt=(easting, northing),
+        nu=_nu(),
+        radie_m=radie_m,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

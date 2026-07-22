@@ -12,10 +12,14 @@ from urllib.parse import urlencode
 
 from mcp_ogc.tools.wfs import query_wfs_features
 
+from shapely.geometry import Point, shape
+
 from geo_tillsyn.analysis import analysera_strandskydd
+from geo_tillsyn.datering import datera_byggnad
 from geo_tillsyn.dossier import Kalla, render_markdown
+from geo_tillsyn.fall1 import bygg_fall1_dossier
 from geo_tillsyn.fall7 import bygg_dossier
-from geo_tillsyn.juridik import juridiskt_lage
+from geo_tillsyn.juridik import fall1_lage, juridiskt_lage
 from geo_tillsyn.timeline import hamta_tidslinje
 
 BYGGNAD_LAYER = "SundsvallsKommun:bal_byggnad_yta"
@@ -233,3 +237,254 @@ def kor_fall7(
     dossier_fil = ut_katalog / "dossier.md"
     dossier_fil.write_text(md, encoding="utf-8")
     return dossier_fil
+
+
+# Prototype honesty: no permit register is reachable yet — every Fall 1
+# result must say so explicitly, never silently omit it.
+_BYGGLOVSREGISTER_OSAKERHET = (
+    "Bygglovsregistret är inte tillgängligt i prototypfasen (Sokigo Nova kräver "
+    "TRIP-avtal) — ingen lovprövning har kunnat kontrolleras mot register; "
+    "kommunens testärenden används."
+)
+
+
+def _valj_byggnad(byggnader: dict, punkt: tuple[float, float], radie_m: float):
+    """Pick the target building: containing the point, else nearest by distance."""
+    features = byggnader.get("features", [])
+    if not features:
+        raise ValueError(
+            f"Ingen byggnad hittades inom {radie_m:.0f} m från punkten "
+            f"E {punkt[0]:.0f}, N {punkt[1]:.0f}."
+        )
+
+    p = Point(punkt)
+    innehallande = None
+    narmast = None
+    narmast_avstand = None
+    for feature in features:
+        geom = shape(feature["geometry"])
+        if innehallande is None and geom.contains(p):
+            innehallande = feature
+            break
+        avstand = geom.distance(p)
+        if narmast_avstand is None or avstand < narmast_avstand:
+            narmast_avstand = avstand
+            narmast = feature
+
+    return innehallande if innehallande is not None else narmast
+
+
+def _fall1_underlag(
+    ows_url: str,
+    punkt: tuple[float, float],
+    nu: str,
+    radie_m: float,
+    ar: list[int] | None,
+    hamta_wfs: Callable,
+    hamta_wms: Callable | None,
+):
+    """Fetch + analyse everything both Fall 1 entry points need."""
+    e, n = punkt
+    bbox_sok = (e - radie_m, n - radie_m, e + radie_m, n + radie_m)
+
+    byggnader = hamta_wfs(ows_url, BYGGNAD_LAYER, bbox=bbox_sok, max_features=500)
+    building_feature = _valj_byggnad(byggnader, punkt, radie_m)
+
+    byggnad_id = str(building_feature.get("id"))
+    footprint = shape(building_feature["geometry"])
+    minx, miny, maxx, maxy = footprint.bounds
+    bbox_foot = (minx - 30.0, miny - 30.0, maxx + 30.0, maxy + 30.0)
+
+    tidslinje_kwargs = {"hamta": hamta_wms} if hamta_wms is not None else {}
+    bilder = hamta_tidslinje(ows_url, bbox_foot, crs=CRS, ar=ar, **tidslinje_kwargs)
+
+    # `misstankt_tom` in timeline.py is a byte-size heuristic calibrated for
+    # full 512x512 search-radius tiles (hundreds of KB); the footprint bbox
+    # here is a tight ~building-sized crop whose legitimate content is small
+    # by comparison, so that heuristic does not transfer. The dating core
+    # gets its own tom-check based on whether any bytes were returned at all;
+    # the byte-size flag is still preserved on `bilder` for the tidslinje
+    # appendix (⚠ display), unchanged from kor_fall7's convention.
+    bilder_for_datering = [
+        type(bild)(ar=bild.ar, layer=bild.layer, png=bild.png, misstankt_tom=not bild.png)
+        for bild in bilder
+    ]
+    datering = datera_byggnad(bilder_for_datering, footprint, bbox_foot)
+
+    osakerheter: list[str] = []
+    inom_strandskydd = False
+    try:
+        zoner_fc = hamta_wfs(ows_url, STRANDSKYDD_LAYER, bbox=bbox_sok, max_features=100)
+        byggnad_fc = {"type": "FeatureCollection", "features": [building_feature]}
+        analyser = analysera_strandskydd(byggnad_fc, zoner_fc)
+        inom_strandskydd = bool(analyser) and analyser[0].laege in ("inom", "delvis")
+    except Exception:
+        inom_strandskydd = False
+        osakerheter.append(
+            f"{STRANDSKYDD_LAYER} kunde inte hämtas (källan otillgänglig) — "
+            "strandskyddsläget har inte kunnat kontrolleras."
+        )
+
+    area_m2 = footprint.area
+    bal_nybyggnadsar = (building_feature.get("properties") or {}).get("bal_nybyggnadsar")
+
+    bedomningsdatum = date.fromisoformat(nu[:10])
+    lage = fall1_lage(
+        area_m2=area_m2,
+        sista_ar_utan=datering.sista_ar_utan,
+        forsta_ar_med=datering.forsta_ar_med,
+        bedomningsdatum=bedomningsdatum,
+        inom_strandskydd=inom_strandskydd,
+    )
+
+    osakerheter.append(_BYGGLOVSREGISTER_OSAKERHET)
+
+    return {
+        "byggnad_id": byggnad_id,
+        "building_feature": building_feature,
+        "footprint": footprint,
+        "bbox_sok": bbox_sok,
+        "bbox_foot": bbox_foot,
+        "bilder": bilder,
+        "datering": datering,
+        "lage": lage,
+        "area_m2": area_m2,
+        "bal_nybyggnadsar": bal_nybyggnadsar,
+        "inom_strandskydd": inom_strandskydd,
+        "osakerheter": osakerheter,
+    }
+
+
+def kor_fall1(
+    ows_url: str,
+    punkt: tuple[float, float],
+    ut_katalog: Path,
+    nu: str,
+    radie_m: float = 100.0,
+    ar: list[int] | None = None,
+    hamta_wfs: Callable = query_wfs_features,
+    hamta_wms: Callable | None = None,
+) -> Path:
+    """Run the Fall 1 slice around a point and write fall1_dossier.md + tidslinje PNGs.
+
+    Args:
+        ows_url: GeoServer OWS endpoint.
+        punkt: (easting, northing) in EPSG:3014 — the handläggare's map click.
+        ut_katalog: Output directory (created if missing).
+        nu: ISO timestamp stamped on every källa (injected: scripts stay
+            deterministic and testable).
+        radie_m: Half-side of the square search box for the target building, metres.
+        ar: Ortofoto years for the tidslinje (default: all 18 verified).
+        hamta_wfs / hamta_wms: Fetchers, injectable for tests.
+
+    Returns:
+        Path to the written fall1_dossier.md.
+    """
+    underlag = _fall1_underlag(ows_url, punkt, nu, radie_m, ar, hamta_wfs, hamta_wms)
+    e, n = punkt
+
+    dossier = bygg_fall1_dossier(
+        rubrik=(
+            f"Fall 1 — olovligt byggande? Byggnad {underlag['byggnad_id']} vid "
+            f"E {e:.0f}, N {n:.0f} ({CRS})"
+        ),
+        byggnad_id=underlag["byggnad_id"],
+        datering=underlag["datering"],
+        lage=underlag["lage"],
+        bal_nybyggnadsar=underlag["bal_nybyggnadsar"],
+        byggnad_kalla=Kalla(
+            f"{BYGGNAD_LAYER} (WFS)",
+            _getfeature_url(ows_url, BYGGNAD_LAYER, underlag["bbox_sok"]),
+            hamtad=nu,
+        ),
+        tidslinje_kalla=Kalla("Ortofoto-tidslinje 1960–2023 (WMS)", ows_url, hamtad=nu),
+        regelverk_kalla=Kalla(
+            "PBL lovbefrielser + preskription (regelverk_vid)",
+            "https://rkrattsdb.gov.se/SFSdoc/10/100900.PDF",
+            hamtad=nu,
+            referens="SFS 2010:900",
+        ),
+        extra_osakerheter=underlag["osakerheter"],
+    )
+
+    ut_katalog.mkdir(parents=True, exist_ok=True)
+    tidslinje_katalog = ut_katalog / "tidslinje"
+    tidslinje_katalog.mkdir(exist_ok=True)
+    bilder = underlag["bilder"]
+    for bild in bilder:
+        (tidslinje_katalog / f"ortofoto_{bild.ar}.png").write_bytes(bild.png)
+
+    poang_per_ar = underlag["datering"].poang_per_ar
+
+    md = render_markdown(dossier)
+    md += "\n## Bilaga: ortofoto-tidslinje\n\n"
+    for bild in bilder:
+        flagga = " ⚠ misstänkt tom bild (kontrollera täckning)" if bild.misstankt_tom else ""
+        poang = f" (poäng {poang_per_ar[bild.ar]:.2f})" if bild.ar in poang_per_ar else ""
+        md += f"- [{bild.ar}](tidslinje/ortofoto_{bild.ar}.png) — {bild.layer}{poang}{flagga}\n"
+
+    dossier_fil = ut_katalog / "fall1_dossier.md"
+    dossier_fil.write_text(md, encoding="utf-8")
+    return dossier_fil
+
+
+def analysera_fall1_punkt(
+    ows_url: str,
+    punkt: tuple[float, float],
+    nu: str,
+    radie_m: float = 100.0,
+    ar: list[int] | None = None,
+    hamta_wfs: Callable = query_wfs_features,
+    hamta_wms: Callable | None = None,
+) -> dict:
+    """Compact, MCP-friendly Fall 1 analysis (olovligt byggande?) at a point.
+
+    Returns plain JSON-serialisable data: dating interval, BAL cross-check,
+    bygglovsplikt + PBL-klockor, declared uncertainties and källa URLs. Never
+    geometry, never imagery — references only.
+    """
+    underlag = _fall1_underlag(ows_url, punkt, nu, radie_m, ar, hamta_wfs, hamta_wms)
+    datering = underlag["datering"]
+    lage = underlag["lage"]
+    bal_nybyggnadsar = underlag["bal_nybyggnadsar"]
+
+    bal_forenligt = None
+    if (
+        bal_nybyggnadsar is not None
+        and datering.sista_ar_utan is not None
+        and datering.forsta_ar_med is not None
+    ):
+        bal_forenligt = datering.sista_ar_utan < bal_nybyggnadsar <= datering.forsta_ar_med
+
+    poang_per_ar = {ar_: round(p, 2) for ar_, p in datering.poang_per_ar.items()}
+
+    osakerheter = list(datering.anmarkningar) + list(lage.atgarder) + list(underlag["osakerheter"])
+
+    return {
+        "byggnad_id": underlag["byggnad_id"],
+        "punkt": {"easting": punkt[0], "northing": punkt[1], "crs": CRS},
+        "area_m2": round(underlag["area_m2"], 1),
+        "sista_ar_utan": datering.sista_ar_utan,
+        "forsta_ar_med": datering.forsta_ar_med,
+        "bal_nybyggnadsar": bal_nybyggnadsar,
+        "bal_forenligt": bal_forenligt,
+        "bygglov_kravdes": lage.bygglov_kravdes,
+        "lovbefrielse": lage.lovbefrielse,
+        "rattelse_preskriberad": lage.rattelse_preskriberad,
+        "sanktionsavgift_mojlig": lage.sanktionsavgift_mojlig,
+        "matningskritiskt": lage.matningskritiskt,
+        "inom_strandskydd": underlag["inom_strandskydd"],
+        "poang_per_ar": poang_per_ar,
+        "osakerheter": osakerheter,
+        "kallor": [
+            {
+                "beskrivning": f"{BYGGNAD_LAYER} (WFS)",
+                "url": _getfeature_url(ows_url, BYGGNAD_LAYER, underlag["bbox_sok"]),
+            },
+            {
+                "beskrivning": "PBL lovbefrielser + preskription (SFS 2010:900)",
+                "url": "https://rkrattsdb.gov.se/SFSdoc/10/100900.PDF",
+            },
+        ],
+        "hamtad": nu,
+    }

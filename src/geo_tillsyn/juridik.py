@@ -114,3 +114,173 @@ def juridiskt_lage(
         preskriberas=preskriberas,
         atgarder=atgarder,
     )
+
+
+@dataclass(frozen=True)
+class Fall1Lage:
+    """The legal position of one suspected olovligt byggande (Fall 1).
+
+    The construction year is only known as an interval — [sista_ar_utan+1,
+    forsta_ar_med] from the ortofoto-tidslinje — so every verdict below is
+    evaluated across the whole interval. Where candidate years disagree, we
+    flag rather than guess.
+    """
+
+    sista_ar_utan: int | None
+    forsta_ar_med: int | None
+    area_m2: float
+    lovbefrielse: str | None
+    bygglov_kravdes: bool | None
+    rattelse_preskriberad: bool | None
+    sanktionsavgift_mojlig: bool | None
+    matningskritiskt: bool
+    atgarder: list[str] = field(default_factory=list)
+
+
+def _plus_ar(d: date, ar: int) -> date:
+    """`d` plus `ar` years, with the Feb-29 -> Mar-1 fallback for non-leap targets."""
+    try:
+        return date(d.year + ar, d.month, d.day)
+    except ValueError:
+        return date(d.year + ar, 3, 1)
+
+
+def _matchad_lovbefrielse(datum: date, area_m2: float, inom_detaljplan: bool):
+    """Return (matched exemption dict or None, list of caps considered)."""
+    resultat = _regelverk.regelverk_vid(datum, _regelverk.Kontext(inom_detaljplan=inom_detaljplan))
+    caps: list[float] = []
+    for e in resultat["lovbefrielser"]:
+        cap = (
+            e["max_kvm_utom_detaljplan"]
+            if (not inom_detaljplan and e.get("max_kvm_utom_detaljplan") is not None)
+            else e["max_kvm"]
+        )
+        caps.append(cap)
+        if cap >= area_m2:
+            return e, caps
+    return None, caps
+
+
+def fall1_lage(
+    area_m2: float,
+    sista_ar_utan: int | None,
+    forsta_ar_med: int | None,
+    bedomningsdatum: date,
+    inom_detaljplan: bool = False,
+    inom_strandskydd: bool = False,
+) -> Fall1Lage:
+    """Evaluate an olovligt-byggande suspicion whose byggnadsår is only an interval.
+
+    The construction happened sometime in [sista_ar_utan+1, forsta_ar_med] (the
+    ortofoto-tidslinje bracket). Every legal question — bygglovsplikt vid
+    uppförande, PBL 11 kap. 20 § rättelse-preskription (10 år), PBL 11 kap. 58 §
+    sanktionsavgift (5 år) — is answered across the WHOLE interval; if candidate
+    years disagree the answer is None plus an åtgärd, never a guess.
+    """
+    atgarder: list[str] = []
+
+    if forsta_ar_med is None:
+        if inom_strandskydd:
+            atgarder.append(
+                "Strandskyddstillsyn preskriberas aldrig enligt PBL-klockorna (MÖD 2021:6) "
+                "— se Fall 7-analysen för strandskyddsdelen."
+            )
+        atgarder.append(
+            "Byggnadens tillkomstår är inte fastställt — datera via ortofoto-tidslinjen "
+            "innan bygglovsplikt och preskription kan avgöras."
+        )
+        return Fall1Lage(
+            sista_ar_utan=sista_ar_utan,
+            forsta_ar_med=forsta_ar_med,
+            area_m2=area_m2,
+            lovbefrielse=None,
+            bygglov_kravdes=None,
+            rattelse_preskriberad=None,
+            sanktionsavgift_mojlig=None,
+            matningskritiskt=False,
+            atgarder=atgarder,
+        )
+
+    if sista_ar_utan is None:
+        kandidat_ar = [forsta_ar_med]
+        atgarder.append(
+            "Nedre gränsen för uppförandeåret är okänd (sista_ar_utan saknas) — "
+            "intervallets start kan inte fastställas från ortofoto-tidslinjen."
+        )
+    else:
+        kandidat_ar = list(range(sista_ar_utan + 1, forsta_ar_med + 1))
+
+    verdikter: set[bool] = set()
+    matchade_namn: set[str] = set()
+    alla_caps: list[float] = []
+    for ar in kandidat_ar:
+        for datum in (date(ar, 1, 1), date(ar, 12, 31)):
+            matchad, caps = _matchad_lovbefrielse(datum, area_m2, inom_detaljplan)
+            alla_caps.extend(caps)
+            verdikter.add(matchad is None)
+            if matchad is not None:
+                matchade_namn.add(matchad["namn"])
+
+    if len(verdikter) == 1:
+        bygglov_kravdes = next(iter(verdikter))
+        lovbefrielse = next(iter(matchade_namn)) if not bygglov_kravdes and matchade_namn else None
+    else:
+        bygglov_kravdes = None
+        lovbefrielse = None
+        atgarder.append(
+            "Intervallet för uppförandeåret spänner över en regeländring i "
+            "bygglovsbefrielserna — konstruktionsåret måste pinpointas innan "
+            "bygglovsplikten kan avgöras."
+        )
+
+    matningskritiskt = any(abs(area_m2 - cap) <= 2.0 for cap in alla_caps)
+    if matningskritiskt:
+        atgarder.append(
+            "Bedömningen är mätningskritisk — arean ligger nära en tröskel och måste "
+            "verifieras genom mätning innan handläggaren lägger fast slutsatsen."
+        )
+
+    senaste = date(forsta_ar_med, 12, 31)
+    tidigaste = date(sista_ar_utan + 1, 1, 1) if sista_ar_utan is not None else None
+
+    if _plus_ar(senaste, 10) < bedomningsdatum:
+        rattelse_preskriberad = True
+    elif tidigaste is not None and _plus_ar(tidigaste, 10) >= bedomningsdatum:
+        rattelse_preskriberad = False
+    else:
+        rattelse_preskriberad = None
+        atgarder.append(
+            "PBL 11 kap. 20 §-klockan (10 år) löper ut någonstans inom "
+            "dateringsintervallet — konstruktionsåret måste pinpointas för att avgöra "
+            "om rättelse är preskriberad."
+        )
+
+    if tidigaste is not None and _plus_ar(tidigaste, 5) >= bedomningsdatum:
+        sanktionsavgift_mojlig = True
+    elif _plus_ar(senaste, 5) < bedomningsdatum:
+        sanktionsavgift_mojlig = False
+    else:
+        sanktionsavgift_mojlig = None
+        atgarder.append(
+            "PBL 11 kap. 58 §-klockan (5 år) löper ut någonstans inom "
+            "dateringsintervallet — konstruktionsåret måste pinpointas för att avgöra "
+            "om sanktionsavgift fortfarande är möjlig."
+        )
+
+    if inom_strandskydd:
+        atgarder.append(
+            "Strandskyddstillsyn preskriberas aldrig enligt PBL-klockorna (MÖD 2021:6) "
+            "— se Fall 7-analysen för strandskyddsdelen."
+        )
+
+    return Fall1Lage(
+        sista_ar_utan=sista_ar_utan,
+        forsta_ar_med=forsta_ar_med,
+        area_m2=area_m2,
+        lovbefrielse=lovbefrielse,
+        bygglov_kravdes=bygglov_kravdes,
+        rattelse_preskriberad=rattelse_preskriberad,
+        sanktionsavgift_mojlig=sanktionsavgift_mojlig,
+        matningskritiskt=matningskritiskt,
+        atgarder=atgarder,
+    )
