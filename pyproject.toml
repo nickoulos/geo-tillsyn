@@ -11,6 +11,8 @@ dependencies = [
     "mcp-ogc",
     "numpy>=2.0",
     "pillow>=10.0",
+    "pypdfium2>=4.30",
+    "pytesseract>=0.3.10",
     "shapely>=2.0",
 ]
 
