@@ -15,7 +15,7 @@ import math
 from pathlib import Path
 
 from mcp_ogc.tools.wfs import query_wfs_features
-from shapely import affinity
+from shapely import affinity, force_2d
 from shapely.geometry import shape
 
 from geo_tillsyn.handling import VATTENMARKE, rita_situationsplan, till_pdf_bytes
@@ -31,7 +31,10 @@ def main() -> None:
     bbox = (e - 100, n - 100, e + 100, n + 100)
     byggnader = query_wfs_features(OWS, BYGGNAD_LAYER, bbox=bbox, max_features=500)
     storst = max(byggnader["features"], key=lambda f: shape(f["geometry"]).area)
-    footprint = shape(storst["geometry"])
+    # karta.sundsvall.se's WFS returns 3D (x, y, z) coordinates; EPSG:3014 is a
+    # 2D CRS and the z is survey noise — normalize here so godkant (derived
+    # below) never carries it.
+    footprint = force_2d(shape(storst["geometry"]))
 
     granser = query_wfs_features(OWS, FASTIGHETSGRANS_LAYER, bbox=bbox, max_features=200)
     grans_geoms = [shape(f["geometry"]) for f in granser["features"]]

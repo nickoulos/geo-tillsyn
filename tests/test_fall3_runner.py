@@ -23,8 +23,17 @@ _BYGGNAD = {
             "id": "bal_byggnad_yta.1",
             "geometry": {
                 "type": "Polygon",
-                # Actual: 12x9 m = 108 m², at (100,100)-(112,109)
-                "coordinates": [[[100, 100], [112, 100], [112, 109], [100, 109], [100, 100]]],
+                # Actual: 12x9 m = 108 m², at (100,100)-(112,109). 3D coords
+                # mirror karta.sundsvall.se's live WFS (x, y, z survey noise).
+                "coordinates": [
+                    [
+                        [100, 100, 12.3],
+                        [112, 100, 12.3],
+                        [112, 109, 12.3],
+                        [100, 109, 12.3],
+                        [100, 100, 12.3],
+                    ]
+                ],
             },
             "properties": {"bal_nybyggnadsar": 2010},
         }

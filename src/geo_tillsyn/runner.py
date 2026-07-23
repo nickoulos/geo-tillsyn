@@ -14,6 +14,7 @@ from urllib.parse import urlencode
 from mcp_ogc.tools.wfs import query_wfs_features
 
 from PIL import Image, ImageDraw
+from shapely import force_2d
 from shapely.geometry import Point, shape
 
 from geo_tillsyn.analysis import analysera_strandskydd
@@ -532,7 +533,10 @@ def _fall3_underlag(
     byggnader = hamta_wfs(ows_url, BYGGNAD_LAYER, bbox=bbox_sok, max_features=500)
     building_feature = _valj_byggnad(byggnader, punkt, radie_m)
     byggnad_id = str(building_feature.get("id"))
-    footprint = shape(building_feature["geometry"])
+    # karta.sundsvall.se's WFS returns 3D (x, y, z) coordinates; EPSG:3014 is a
+    # 2D CRS and the z is survey noise — normalize right where the footprint
+    # is built so it never reaches the delta/overlay math downstream.
+    footprint = force_2d(shape(building_feature["geometry"]))
 
     lov = hitta_lov(lovarkiv_katalog, punkt=punkt)
     if lov is None:
