@@ -303,3 +303,96 @@ def fall1_lage(
         matningskritiskt=matningskritiskt,
         atgarder=atgarder,
     )
+
+
+_AREA_BAND_M2 = 2.0
+_AVSTAND_BAND_M = 0.5
+
+
+@dataclass(frozen=True)
+class Fall3Lage:
+    """The time-aware legal position of a suspected lovavvikelse (Fall 3)."""
+
+    pbl_vid_beslut: str | None
+    overgangsregel_tillampad: bool
+    tillsyn_lagrum: str | None
+    sista_ar_utan: int | None
+    forsta_ar_med: int | None
+    rattelse_preskriberad: bool | None
+    sanktionsavgift_mojlig: bool | None
+    matningskritiska: list[str] = field(default_factory=list)
+    atgarder: list[str] = field(default_factory=list)
+
+
+def fall3_lage(
+    beslutsdatum: date,
+    sista_ar_utan: int | None,
+    forsta_ar_med: int | None,
+    bedomningsdatum: date,
+    delta=None,
+) -> Fall3Lage:
+    """Evaluate a lovavvikelse suspicion: which law governs the lov, both PBL
+    clocks over the completion interval, and which deviations are inside the
+    measurement band (and thus cannot be asserted without inmätning).
+
+    Vilken lag som styr lovet är den som gällde vid beslutsdatum; om den eran
+    skiljer sig från dagens flaggas övergångsregeln (PBL 2010:900 p. 2).
+    """
+    atgarder: list[str] = []
+
+    vid_beslut = _regelverk.regelverk_vid(
+        beslutsdatum, _regelverk.Kontext(), bedomningsdatum=bedomningsdatum
+    )["pbl_version"]
+    idag = _regelverk.regelverk_vid(
+        bedomningsdatum, _regelverk.Kontext(), bedomningsdatum=bedomningsdatum
+    )["pbl_version"]
+    pbl_vid_beslut = f"{vid_beslut['namn']} (SFS {vid_beslut['sfs']})" if vid_beslut else None
+    tillsyn_lagrum = vid_beslut["tillsyn_lagrum"] if vid_beslut else None
+    overgang = bool(vid_beslut and idag and vid_beslut["sfs"] != idag["sfs"])
+
+    if forsta_ar_med is None:
+        rattelse, sanktion = None, None
+        atgarder.append(
+            "Färdigställandet är inte daterat — datera via ortofoto-tidslinjen "
+            "innan preskriptionsklockorna kan avgöras."
+        )
+    else:
+        rattelse, sanktion, klock_atgarder = _pbl_klockor(
+            sista_ar_utan, forsta_ar_med, bedomningsdatum
+        )
+        atgarder.extend(klock_atgarder)
+
+    matningskritiska: list[str] = []
+    if delta is not None:
+        if abs(delta.area_diff_m2) <= _AREA_BAND_M2:
+            matningskritiska.append(
+                f"Areaavvikelsen ({delta.area_diff_m2:+.1f} m²) ligger inom "
+                f"mätosäkerheten (±{_AREA_BAND_M2:.0f} m²) — kan inte beläggas utan inmätning."
+            )
+        if (
+            delta.avstand_grans_godkant_m is not None
+            and delta.avstand_grans_verklig_m is not None
+            and abs(delta.avstand_grans_godkant_m - delta.avstand_grans_verklig_m)
+            <= _AVSTAND_BAND_M
+        ):
+            matningskritiska.append(
+                "Skillnaden i avstånd till fastighetsgräns ligger inom mätosäkerheten "
+                f"(±{_AVSTAND_BAND_M:.1f} m) — kan inte beläggas utan inmätning."
+            )
+    if matningskritiska:
+        atgarder.append(
+            "Bedömningen är mätningskritisk — avvikelser inom mätosäkerheten måste "
+            "verifieras genom inmätning innan handläggaren lägger fast slutsatsen."
+        )
+
+    return Fall3Lage(
+        pbl_vid_beslut=pbl_vid_beslut,
+        overgangsregel_tillampad=overgang,
+        tillsyn_lagrum=tillsyn_lagrum,
+        sista_ar_utan=sista_ar_utan,
+        forsta_ar_med=forsta_ar_med,
+        rattelse_preskriberad=rattelse,
+        sanktionsavgift_mojlig=sanktion,
+        matningskritiska=matningskritiska,
+        atgarder=atgarder,
+    )
