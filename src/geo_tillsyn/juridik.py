@@ -161,6 +161,47 @@ def _matchad_lovbefrielse(datum: date, area_m2: float, inom_detaljplan: bool):
     return None, caps
 
 
+def _pbl_klockor(
+    sista_ar_utan: int | None,
+    forsta_ar_med: int,
+    bedomningsdatum: date,
+) -> tuple[bool | None, bool | None, list[str]]:
+    """Both PBL clocks over the completion interval — conservative at the bounds.
+
+    Returns (rattelse_preskriberad, sanktionsavgift_mojlig, atgarder); None
+    where the interval straddles a clock's expiry.
+    """
+    atgarder: list[str] = []
+    senaste = date(forsta_ar_med, 12, 31)
+    tidigaste = date(sista_ar_utan + 1, 1, 1) if sista_ar_utan is not None else None
+
+    if _plus_ar(senaste, 10) < bedomningsdatum:
+        rattelse_preskriberad: bool | None = True
+    elif tidigaste is not None and _plus_ar(tidigaste, 10) >= bedomningsdatum:
+        rattelse_preskriberad = False
+    else:
+        rattelse_preskriberad = None
+        atgarder.append(
+            "PBL 11 kap. 20 §-klockan (10 år) löper ut någonstans inom "
+            "dateringsintervallet — konstruktionsåret måste pinpointas för att avgöra "
+            "om rättelse är preskriberad."
+        )
+
+    if tidigaste is not None and _plus_ar(tidigaste, 5) >= bedomningsdatum:
+        sanktionsavgift_mojlig: bool | None = True
+    elif _plus_ar(senaste, 5) < bedomningsdatum:
+        sanktionsavgift_mojlig = False
+    else:
+        sanktionsavgift_mojlig = None
+        atgarder.append(
+            "PBL 11 kap. 58 §-klockan (5 år) löper ut någonstans inom "
+            "dateringsintervallet — konstruktionsåret måste pinpointas för att avgöra "
+            "om sanktionsavgift fortfarande är möjlig."
+        )
+
+    return rattelse_preskriberad, sanktionsavgift_mojlig, atgarder
+
+
 def fall1_lage(
     area_m2: float,
     sista_ar_utan: int | None,
@@ -240,32 +281,10 @@ def fall1_lage(
             "verifieras genom mätning innan handläggaren lägger fast slutsatsen."
         )
 
-    senaste = date(forsta_ar_med, 12, 31)
-    tidigaste = date(sista_ar_utan + 1, 1, 1) if sista_ar_utan is not None else None
-
-    if _plus_ar(senaste, 10) < bedomningsdatum:
-        rattelse_preskriberad = True
-    elif tidigaste is not None and _plus_ar(tidigaste, 10) >= bedomningsdatum:
-        rattelse_preskriberad = False
-    else:
-        rattelse_preskriberad = None
-        atgarder.append(
-            "PBL 11 kap. 20 §-klockan (10 år) löper ut någonstans inom "
-            "dateringsintervallet — konstruktionsåret måste pinpointas för att avgöra "
-            "om rättelse är preskriberad."
-        )
-
-    if tidigaste is not None and _plus_ar(tidigaste, 5) >= bedomningsdatum:
-        sanktionsavgift_mojlig = True
-    elif _plus_ar(senaste, 5) < bedomningsdatum:
-        sanktionsavgift_mojlig = False
-    else:
-        sanktionsavgift_mojlig = None
-        atgarder.append(
-            "PBL 11 kap. 58 §-klockan (5 år) löper ut någonstans inom "
-            "dateringsintervallet — konstruktionsåret måste pinpointas för att avgöra "
-            "om sanktionsavgift fortfarande är möjlig."
-        )
+    rattelse_preskriberad, sanktionsavgift_mojlig, klock_atgarder = _pbl_klockor(
+        sista_ar_utan, forsta_ar_med, bedomningsdatum
+    )
+    atgarder.extend(klock_atgarder)
 
     if inom_strandskydd:
         atgarder.append(
