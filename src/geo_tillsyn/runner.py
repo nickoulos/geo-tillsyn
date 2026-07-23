@@ -15,7 +15,7 @@ from mcp_ogc.tools.wfs import query_wfs_features
 
 from PIL import Image, ImageDraw
 from shapely import force_2d
-from shapely.geometry import Point, shape
+from shapely.geometry import Point, mapping, shape
 
 from geo_tillsyn.analysis import analysera_strandskydd
 from geo_tillsyn.datering import datera_byggnad
@@ -882,4 +882,54 @@ def analysera_fall3_punkt(
             },
         ],
         "hamtad": nu,
+    }
+
+
+def fall3_geometri(
+    ows_url: str,
+    punkt: tuple[float, float],
+    nu: str,
+    radie_m: float = 100.0,
+    hamta_wfs: Callable = query_wfs_features,
+    lovarkiv_katalog: Path = LOVARKIV_KATALOG,
+) -> dict:
+    """Hämta godkänt och verkligt läge som GeoJSON för karta-overlay (Fall 3).
+
+    Till skillnad från `analysera_fall3_punkt` (kompakt JSON, inga geometrier —
+    Eneo-kontraktet) returnerar denna funktion faktiska polygoner i EPSG:3014,
+    avsedda för Origo-pluginets kartlager, aldrig för Eneo-verktygen.
+
+    Args:
+        ows_url: GeoServer OWS endpoint.
+        punkt: (easting, northing) i EPSG:3014 — kartklicket.
+        nu: ISO-tidsstämpel (injiceras för deterministiska tester).
+        radie_m: Sökradie i meter runt punkten (standard 100).
+        hamta_wfs: WFS-hämtare, injicerbar för tester.
+        lovarkiv_katalog: Katalog med syntetiska lov-poster (mock-ByggR).
+
+    Returns:
+        {"lov_hittat": bool, "godkant_lage": GeoJSON | None,
+         "verkligt_lage": GeoJSON | None, "dnr": str | None}
+    """
+    e, n = punkt
+    bbox = (e - radie_m, n - radie_m, e + radie_m, n + radie_m)
+
+    byggnader = hamta_wfs(ows_url, BYGGNAD_LAYER, bbox=bbox, max_features=500)
+    building_feature = _valj_byggnad(byggnader, punkt, radie_m)
+    footprint = force_2d(shape(building_feature["geometry"]))
+
+    lov = hitta_lov(lovarkiv_katalog, punkt=punkt)
+    if lov is None:
+        return {
+            "lov_hittat": False,
+            "godkant_lage": None,
+            "verkligt_lage": None,
+            "dnr": None,
+        }
+
+    return {
+        "lov_hittat": True,
+        "godkant_lage": mapping(lov.godkant_lage),
+        "verkligt_lage": mapping(footprint),
+        "dnr": lov.dnr,
     }

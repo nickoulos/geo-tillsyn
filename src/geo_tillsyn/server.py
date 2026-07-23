@@ -15,11 +15,14 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 from geo_tillsyn.runner import (
     analysera_fall1_punkt,
     analysera_fall3_punkt,
     analysera_punkt,
+    fall3_geometri,
     kor_fall7,
 )
 
@@ -191,6 +194,118 @@ def analysera_lovavvikelse_vid_punkt(
         nu=_nu(),
         radie_m=radie_m,
     )
+
+
+def _json(data: dict, status: int = 200) -> JSONResponse:
+    """Bygg ett JSONResponse med permissiv CORS (Origo-pluginet är cross-origin)."""
+    return JSONResponse(data, status_code=status, headers={"Access-Control-Allow-Origin": "*"})
+
+
+def _cors_preflight() -> Response:
+    """Svara på CORS-preflight (OPTIONS) för /api/*-rutterna."""
+    return Response(
+        status_code=204,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )
+
+
+def _parsa_punkt(request: Request) -> tuple[float, float, float | None]:
+    """Läs easting/northing/radie_m ur query-strängen; kastar ValueError vid fel."""
+    try:
+        easting = float(request.query_params["easting"])
+        northing = float(request.query_params["northing"])
+    except (KeyError, ValueError) as exc:
+        raise ValueError(f"easting/northing saknas eller kunde inte tolkas: {exc}") from exc
+
+    radie_raw = request.query_params.get("radie_m")
+    radie_m = float(radie_raw) if radie_raw is not None else None
+    return easting, northing, radie_m
+
+
+async def _hantera_analys(request: Request, analysfunktion, default_radie: float) -> Response:
+    """Gemensam hantering av GET/OPTIONS för de tre analys-endpointen.
+
+    Parsar easting/northing/radie_m, anropar `analysfunktion`, och mappar fel
+    till 400 (dåliga query-parametrar), 404 (ValueError — ingen byggnad/lov
+    hittad, ett ärligt "hittades inte"-svar) respektive 500 (oväntat fel).
+    """
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+
+    try:
+        easting, northing, radie_m = _parsa_punkt(request)
+    except ValueError as exc:
+        return _json({"fel": str(exc)}, status=400)
+
+    try:
+        resultat = analysfunktion(
+            ows_url=SUNDSVALL_OWS,
+            punkt=(easting, northing),
+            radie_m=radie_m if radie_m is not None else default_radie,
+            nu=_nu(),
+        )
+    except ValueError as exc:
+        return _json({"fel": str(exc)}, status=404)
+    except Exception:
+        return _json({"fel": "internt fel"}, status=500)
+
+    return _json(resultat)
+
+
+@mcp.custom_route("/api/strandskydd", methods=["GET", "OPTIONS"])
+async def api_strandskydd(request: Request) -> Response:
+    """REST-motsvarighet till analysera_strandskydd_vid_punkt (Fall 7), för Origo."""
+    return await _hantera_analys(request, analysera_punkt, default_radie=150.0)
+
+
+@mcp.custom_route("/api/olovligt", methods=["GET", "OPTIONS"])
+async def api_olovligt(request: Request) -> Response:
+    """REST-motsvarighet till analysera_olovligt_byggande_vid_punkt (Fall 1), för Origo."""
+    return await _hantera_analys(request, analysera_fall1_punkt, default_radie=100.0)
+
+
+@mcp.custom_route("/api/lovavvikelse", methods=["GET", "OPTIONS"])
+async def api_lovavvikelse(request: Request) -> Response:
+    """REST-motsvarighet till analysera_lovavvikelse_vid_punkt (Fall 3), för Origo."""
+    return await _hantera_analys(request, analysera_fall3_punkt, default_radie=100.0)
+
+
+@mcp.custom_route("/api/lovavvikelse/geometri", methods=["GET", "OPTIONS"])
+async def api_lovavvikelse_geometri(request: Request) -> Response:
+    """Godkänt/verkligt läge som GeoJSON (EPSG:3014) för Fall 3-overlay på kartan."""
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+
+    try:
+        easting, northing, radie_m = _parsa_punkt(request)
+    except ValueError as exc:
+        return _json({"fel": str(exc)}, status=400)
+
+    try:
+        resultat = fall3_geometri(
+            ows_url=SUNDSVALL_OWS,
+            punkt=(easting, northing),
+            radie_m=radie_m if radie_m is not None else 100.0,
+            nu=_nu(),
+        )
+    except ValueError as exc:
+        return _json({"fel": str(exc)}, status=404)
+    except Exception:
+        return _json({"fel": "internt fel"}, status=500)
+
+    return _json(resultat)
+
+
+@mcp.custom_route("/api/health", methods=["GET", "OPTIONS"])
+async def api_health(request: Request) -> Response:
+    """Enkel hälsokontroll: bekräftar att alla fyra MCP-verktyg är registrerade."""
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    return _json({"status": "ok", "tools": 4})
 
 
 def main(argv: list[str] | None = None) -> int:
