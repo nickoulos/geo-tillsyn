@@ -159,6 +159,23 @@ def test_analysera_fall3_ar_kompakt_och_korrekt(tmp_path):
     assert any("syntetiskt" in o.lower() for o in svar["osakerheter"])
 
 
+def test_hojd_och_fasad_osakerhet_alltid_med(tmp_path):
+    arkiv = tmp_path / "lovarkiv"
+    _skriv_lov(arkiv)
+
+    svar = analysera_fall3_punkt(
+        "https://example.com/ows",
+        PUNKT,
+        NU,
+        ar=[2007, 2010, 2013, 2015, 2021, 2023],
+        hamta_wfs=_fake_wfs,
+        hamta_wms=_fake_wms,
+        lovarkiv_katalog=arkiv,
+    )
+
+    assert any("fasader" in o.lower() for o in svar["osakerheter"])
+
+
 def test_utan_lov_ges_arligt_svar(tmp_path):
     arkiv = tmp_path / "tomt"
     arkiv.mkdir()
@@ -175,6 +192,103 @@ def test_utan_lov_ges_arligt_svar(tmp_path):
 
     assert svar["lov_hittat"] is False
     assert "Fall 1" in svar["meddelande"]
+
+
+def _skriv_lov_langt_fran_byggnad(katalog):
+    """A lov whose godkant_lage is within 100 m of PUNKT but far from the building.
+
+    PUNKT=(105,104); building is at (100,100)-(112,109). This lov's godkant
+    square sits at (160,100)-(170,108) — within max_avstand_m=100 of PUNKT
+    (so hitta_lov still matches it) but ~48 m from the building footprint,
+    which should trip the lov<->byggnad pairing sanity check.
+    """
+    katalog.mkdir(parents=True, exist_ok=True)
+    record = {
+        "syntetisk": True,
+        "anmarkning": "Syntetiskt testärende — felkopplat lov.",
+        "dnr": "SBN 2009-9999",
+        "fastighet": "ALNÖ-USLAND 1:99",
+        "beslutsdatum": "2009-06-19",
+        "atgard": "Nybyggnad av enbostadshus",
+        "byggnadsarea_m2": 80.0,
+        "godkant_lage": {
+            "crs": "EPSG:3014",
+            "koordinater": [[160, 100], [170, 100], [170, 108], [160, 108]],
+        },
+        "villkor": [],
+        "handling": None,
+    }
+    (katalog / "b.json").write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+
+
+def test_lov_langt_fran_byggnad_ger_koppling_osakerhet(tmp_path):
+    arkiv = tmp_path / "lovarkiv"
+    _skriv_lov_langt_fran_byggnad(arkiv)
+
+    svar = analysera_fall3_punkt(
+        "https://example.com/ows",
+        PUNKT,
+        NU,
+        ar=[2007, 2010, 2013, 2015, 2021, 2023],
+        hamta_wfs=_fake_wfs,
+        hamta_wms=_fake_wms,
+        lovarkiv_katalog=arkiv,
+    )
+
+    assert svar["lov_hittat"] is True
+    assert any("Kopplingen lov–byggnad" in o for o in svar["osakerheter"])
+
+
+def test_multipolygon_byggnad_overlay_lyckas(tmp_path):
+    arkiv = tmp_path / "lovarkiv"
+    _skriv_lov(arkiv)
+    ut = tmp_path / "ut"
+
+    byggnad_multi = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "id": "bal_byggnad_yta.1",
+                "geometry": {
+                    "type": "MultiPolygon",
+                    "coordinates": [
+                        [
+                            [
+                                [100, 100, 12.3],
+                                [112, 100, 12.3],
+                                [112, 109, 12.3],
+                                [100, 109, 12.3],
+                                [100, 100, 12.3],
+                            ]
+                        ]
+                    ],
+                },
+                "properties": {"bal_nybyggnadsar": 2010},
+            }
+        ],
+    }
+
+    def fake_wfs_multi(_url, layer, bbox=None, max_features=None):
+        if "byggnad" in layer:
+            return byggnad_multi
+        if "FastighetGrans" in layer:
+            return _GRANSER
+        return {"type": "FeatureCollection", "features": []}
+
+    dossier = kor_fall3(
+        "https://example.com/ows",
+        PUNKT,
+        ut,
+        NU,
+        ar=[2007, 2010, 2013, 2015, 2021, 2023],
+        hamta_wfs=fake_wfs_multi,
+        hamta_wms=_fake_wms,
+        lovarkiv_katalog=arkiv,
+    )
+
+    assert dossier.exists()
+    assert (ut / "overlay.png").exists()
 
 
 def test_grans_bortfall_ger_osakerhet(tmp_path):

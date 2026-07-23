@@ -170,7 +170,8 @@ def analysera_lovavvikelse_vid_punkt(
     handlingen (OCR) mot registerposten, kvantifierar avvikelsen mellan
     godkänt och verkligt läge (area, placering, avstånd till gräns), daterar
     färdigställandet via ortofoto-tidslinjen och bedömer PBL-klockorna.
-    Vilken lag som styr lovet avgörs av ärendets start (ÄPBL före 2011-05-02).
+    Vilken lag som styr lovet är den som gällde vid beslutsdatum (ÄPBL för
+    lov beslutade före 2011-05-02).
     Lovuppgifterna kommer ur ett SYNTETISKT testarkiv — prototypfasen har
     ingen åtkomst till kommunens ärendesystem. Systemet gör en bedömning —
     beslutet fattas av handläggaren.

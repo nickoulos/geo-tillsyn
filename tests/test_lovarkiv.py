@@ -81,3 +81,12 @@ def test_record_utan_syntetisk_flagga_avvisas(tmp_path):
 
 def test_tom_katalog_ger_none(tmp_path):
     assert hitta_lov(tmp_path, punkt=(0.0, 0.0)) is None
+
+
+def test_fel_crs_avvisas_med_epsg_i_felmeddelandet(tmp_path):
+    record = _lov_record()
+    record["godkant_lage"]["crs"] = "EPSG:3006"
+    _skriv(tmp_path, "a.json", record)
+
+    with pytest.raises(ValueError, match="3006"):
+        hitta_lov(tmp_path, punkt=(105.0, 104.0))

@@ -340,15 +340,20 @@ def fall3_lage(
     """
     atgarder: list[str] = []
 
-    vid_beslut = _regelverk.regelverk_vid(
+    vid_beslut_resultat = _regelverk.regelverk_vid(
         beslutsdatum, _regelverk.Kontext(), bedomningsdatum=bedomningsdatum
-    )["pbl_version"]
+    )
+    vid_beslut = vid_beslut_resultat["pbl_version"]
     idag = _regelverk.regelverk_vid(
         bedomningsdatum, _regelverk.Kontext(), bedomningsdatum=bedomningsdatum
     )["pbl_version"]
     pbl_vid_beslut = f"{vid_beslut['namn']} (SFS {vid_beslut['sfs']})" if vid_beslut else None
     tillsyn_lagrum = vid_beslut["tillsyn_lagrum"] if vid_beslut else None
     overgang = bool(vid_beslut and idag and vid_beslut["sfs"] != idag["sfs"])
+
+    overgangsbestammelse_atgard = vid_beslut_resultat["overgangsbestammelser"].get("atgard")
+    if overgangsbestammelse_atgard:
+        atgarder.append(overgangsbestammelse_atgard)
 
     if forsta_ar_med is None:
         rattelse, sanktion = None, None

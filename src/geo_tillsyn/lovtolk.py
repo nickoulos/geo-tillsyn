@@ -69,14 +69,14 @@ def tolka_handling(
     ocr: Callable[[Image.Image], tuple[str, float]] | None = None,
 ) -> TolkatDokument:
     """OCR the scanned handling and extract the known fields with confidence."""
-    bild = _rasterisera(pdf_bytes)
     try:
+        bild = _rasterisera(pdf_bytes)
         text, konfidens = (ocr or _tesseract_ocr)(bild)
     except Exception as fel:
         return TolkatDokument(
             tillganglig=False,
             anmarkningar=[
-                "OCR ej tillgänglig — handlingen har inte kunnat verifieras maskinellt "
+                "OCR ej tillgänglig — handlingen kunde inte läsas "
                 f"({type(fel).__name__})."
             ],
         )

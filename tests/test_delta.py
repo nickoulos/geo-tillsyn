@@ -7,7 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 """
 
 import pytest
-from shapely.geometry import LineString, box
+from shapely.geometry import LineString, Polygon, box
 
 from geo_tillsyn.delta import jamfor_lage
 
@@ -60,3 +60,13 @@ def test_identiska_lagen_ger_nollavvikelse():
     assert d.area_diff_m2 == pytest.approx(0.0)
     assert d.centroid_forskjutning_m == pytest.approx(0.0)
     assert d.utanfor_godkant_m2 == pytest.approx(0.0)
+
+
+def test_degenererat_godkant_ger_anmarkning_om_procent():
+    degenererat = Polygon([(0.0, 0.0), (1.0, 0.0), (2.0, 0.0)])  # zero area
+
+    d = jamfor_lage(degenererat, VERKLIGT)
+
+    assert d.godkand_area_m2 == pytest.approx(0.0)
+    assert d.area_diff_procent == pytest.approx(0.0)
+    assert any("ingen mätbar yta" in a.lower() for a in d.anmarkningar)

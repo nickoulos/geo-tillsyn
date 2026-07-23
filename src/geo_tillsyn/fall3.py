@@ -4,8 +4,8 @@ REALITY = byggnadens verkliga läge och area (WFS + ortofoto-datering).
 RULE = det beviljade (syntetiska) lovet: godkänt läge, area, villkor — läst ur
 mock-ByggR OCH ur den skannade handlingen (OCR), i öppen korsjämförelse.
 DIFF = delta-motorns kvantifierade avvikelser. TIME = när avvikelsen
-färdigställdes -> PBL-klockorna; vilken lag som styr lovet avgörs av
-ärendets start (ÄPBL för lov före 2011-05-02). Bedömningen kvantifierar —
+färdigställdes -> PBL-klockorna; Vilken lag som styr lovet är den som gällde
+vid beslutsdatum (ÄPBL för lov beslutade före 2011-05-02). Bedömningen kvantifierar —
 om avvikelsen är väsentlig, och beslutet, är handläggarens.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
@@ -16,15 +16,22 @@ from __future__ import annotations
 from geo_tillsyn.datering import DateringsResultat
 from geo_tillsyn.delta import DeltaResultat
 from geo_tillsyn.dossier import Bedomning, Dossier, Fakta, Kalla
-from geo_tillsyn.juridik import Fall3Lage
+from geo_tillsyn.juridik import _AREA_BAND_M2, _AVSTAND_BAND_M, Fall3Lage
 from geo_tillsyn.lovarkiv import LovBeslut
 
 
 def _lovfakta(lov: LovBeslut) -> str:
+    byggnadsarea = (
+        f"byggnadsarea {lov.byggnadsarea_m2:.1f} m²."
+        if lov.byggnadsarea_m2 is not None
+        else "byggnadsarea ej angiven i registerposten."
+    )
     text = (
         f"Bygglov {lov.dnr} ({lov.fastighet}) beviljades {lov.beslutsdatum}: "
-        f"{lov.atgard}, byggnadsarea {lov.byggnadsarea_m2:.1f} m²."
+        f"{lov.atgard}, {byggnadsarea}"
     )
+    if lov.villkor:
+        text += " Villkor: " + "; ".join(lov.villkor)
     if lov.anmarkning:
         text += f" [{lov.anmarkning}]"
     return text
@@ -89,13 +96,36 @@ def _regelverksfakta(lage: Fall3Lage) -> str | None:
 
 
 def _bedomning_pastaende(lage: Fall3Lage, delta: DeltaResultat) -> str:
-    text = (
-        f"Byggnadens utförande avviker mätbart från det beviljade lovet "
-        f"({delta.area_diff_m2:+.1f} m² area; "
-        f"{delta.utanfor_godkant_m2:.1f} m² utanför godkänt läge). "
-        "Om avvikelsen är väsentlig är en rättslig kvalificering som görs av "
-        "handläggaren, inte av systemet."
+    avstandsskillnad = (
+        abs(delta.avstand_grans_godkant_m - delta.avstand_grans_verklig_m)
+        if delta.avstand_grans_godkant_m is not None and delta.avstand_grans_verklig_m is not None
+        else 0.0
     )
+    tydlig = (
+        abs(delta.area_diff_m2) > _AREA_BAND_M2
+        or delta.utanfor_godkant_m2 > _AREA_BAND_M2
+        or avstandsskillnad > _AVSTAND_BAND_M
+    )
+    nagon_avvikelse = (
+        abs(delta.area_diff_m2) > 0.05 or delta.utanfor_godkant_m2 > 0.05 or avstandsskillnad > 0.05
+    )
+
+    if tydlig:
+        text = (
+            f"Byggnadens utförande avviker mätbart från det beviljade lovet "
+            f"({delta.area_diff_m2:+.1f} m² area; "
+            f"{delta.utanfor_godkant_m2:.1f} m² utanför godkänt läge). "
+            "Om avvikelsen är väsentlig är en rättslig kvalificering som görs av "
+            "handläggaren, inte av systemet."
+        )
+    elif nagon_avvikelse:
+        text = (
+            "Avvikelser mellan utförandet och det beviljade lovet har uppmätts "
+            "men ligger inom mätosäkerheten och kan inte beläggas utan inmätning."
+        )
+    else:
+        text = "Inga mätbara avvikelser mellan utförandet och det beviljade lovet har konstaterats."
+
     if lage.rattelse_preskriberad is True:
         text += " Möjligheten till rättelseföreläggande (10 år) är preskriberad."
     elif lage.rattelse_preskriberad is False:
@@ -109,7 +139,6 @@ def _bedomning_pastaende(lage: Fall3Lage, delta: DeltaResultat) -> str:
 
 def bygg_fall3_dossier(
     rubrik: str,
-    byggnad_id: str,
     lov: LovBeslut,
     korsjamforelse: dict[str, str] | None,
     tolkat_anmarkningar: list[str],

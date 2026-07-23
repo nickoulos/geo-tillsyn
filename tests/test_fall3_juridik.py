@@ -113,3 +113,19 @@ def test_tydliga_avvikelser_ar_inte_matningskritiska():
     )
 
     assert lage.matningskritiska == []
+
+
+def test_overgangsbestammelse_varningsfonster_flaggas_utan_arendestart():
+    # 2012-06-01 is inside the 3-year varningsfönster after the 2011-05-02
+    # ÄPBL->PBL transition; without an arende_startdatum the rule engine
+    # can't say which law governs and returns an "atgard" asking for it —
+    # that warning must survive into Fall3Lage.atgarder, not be dropped.
+    lage = fall3_lage(
+        beslutsdatum=date(2012, 6, 1),
+        sista_ar_utan=2010,
+        forsta_ar_med=2013,
+        bedomningsdatum=date(2026, 7, 23),
+        delta=_delta(),
+    )
+
+    assert any("startdatum" in a.lower() for a in lage.atgarder)

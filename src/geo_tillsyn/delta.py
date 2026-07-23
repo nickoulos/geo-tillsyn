@@ -41,6 +41,10 @@ def jamfor_lage(
     verklig_area = verkligt.area
     diff = verklig_area - godkand_area
     procent = (diff / godkand_area * 100.0) if godkand_area else 0.0
+    if godkand_area == 0:
+        anmarkningar.append(
+            "Godkänt läge har ingen mätbar yta — procentjämförelse ej möjlig."
+        )
 
     gc, vc = godkant.centroid, verkligt.centroid
     forskjutning = math.hypot(vc.x - gc.x, vc.y - gc.y)

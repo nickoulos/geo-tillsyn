@@ -42,6 +42,13 @@ def _las_record(fil: Path) -> LovBeslut:
             f"{fil.name}: posten saknar 'syntetisk: true' — arkivet läser enbart "
             "uttryckligen syntetiska testärenden i prototypfasen."
         )
+    crs = data["godkant_lage"].get("crs")
+    if crs is not None and crs != "EPSG:3014":
+        raise ValueError(
+            f"{fil.name}: godkant_lage har crs {crs!r}, förväntat EPSG:3014 — "
+            "felaktig CRS ger tyst kilometerskaliga fel (axelordnings-fällan i EPSG:3006)."
+        )
+
     handling = data.get("handling")
     return LovBeslut(
         dnr=data["dnr"],

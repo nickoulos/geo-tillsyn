@@ -62,6 +62,13 @@ def test_saknad_ocr_motor_ger_otillganglig_med_anmarkning():
     assert any("OCR ej tillgänglig" in a for a in tolkat.anmarkningar)
 
 
+def test_korrupt_pdf_ger_otillganglig_utan_krasch():
+    tolkat = tolka_handling(b"inte en pdf", ocr=_fake_ocr)
+
+    assert tolkat.tillganglig is False
+    assert any("OCR ej tillgänglig" in a for a in tolkat.anmarkningar)
+
+
 def test_lag_konfidens_flaggas():
     def osaker_ocr(_bild):
         return OCR_TEXT, 0.31

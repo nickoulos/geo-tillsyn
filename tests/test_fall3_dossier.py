@@ -19,7 +19,7 @@ from geo_tillsyn.lovarkiv import hitta_lov
 KALLA = Kalla("test", "https://example.com", hamtad="2026-07-23T00:00:00Z")
 
 
-def _lov(tmp_path: Path):
+def _lov(tmp_path: Path, **extra):
     record = {
         "syntetisk": True,
         "anmarkning": "Syntetiskt testärende — inga verkliga byggärenden.",
@@ -35,18 +35,19 @@ def _lov(tmp_path: Path):
         "villkor": [],
         "handling": None,
     }
+    record.update(extra)
     (tmp_path / "a.json").write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
     return hitta_lov(tmp_path, fastighet="ALNÖ-USLAND 1:45")
 
 
-def _dossier(tmp_path, korsjamforelse=None):
-    lov = _lov(tmp_path)
-    delta = jamfor_lage(box(0, 0, 10, 8), box(2, 0, 12.9, 8.7))
+def _dossier(tmp_path, korsjamforelse=None, verkligt=None, lov_extra=None):
+    lov = _lov(tmp_path, **(lov_extra or {}))
+    verkligt = verkligt if verkligt is not None else box(2, 0, 12.9, 8.7)
+    delta = jamfor_lage(box(0, 0, 10, 8), verkligt)
     datering = DateringsResultat(sista_ar_utan=2007, forsta_ar_med=2010)
     lage = fall3_lage(date(2009, 6, 19), 2007, 2010, date(2026, 7, 23), delta)
     return bygg_fall3_dossier(
         rubrik="Fall 3 — test",
-        byggnad_id="byggnad.1",
         lov=lov,
         korsjamforelse=korsjamforelse,
         tolkat_anmarkningar=[],
@@ -110,3 +111,31 @@ def test_beslut_ar_tomt(tmp_path):
     md = render_markdown(_dossier(tmp_path))
 
     assert "avsiktligt tom" in md
+
+
+def test_identiska_lagen_ger_inga_matbara_avvikelser(tmp_path):
+    md = render_markdown(_dossier(tmp_path, verkligt=box(0, 0, 10, 8)))
+
+    assert "Inga mätbara avvikelser" in md
+    assert "avviker mätbart" not in md
+
+
+def test_liten_areaavvikelse_ger_matosakerhetstext(tmp_path):
+    # 80 m² godkänt, 81.5 m² verkligt -> +1.5 m² diff, inside the 2.0 m² band.
+    md = render_markdown(_dossier(tmp_path, verkligt=box(0, 0, 10, 8.15)))
+
+    assert "inom mätosäkerheten" in md
+
+
+def test_byggnadsarea_saknas_renderas_utan_krasch(tmp_path):
+    md = render_markdown(_dossier(tmp_path, lov_extra={"byggnadsarea_m2": None}))
+
+    assert "ej angiven" in md
+
+
+def test_villkor_redovisas_i_lovfaktan(tmp_path):
+    md = render_markdown(
+        _dossier(tmp_path, lov_extra={"villkor": ["Byggnaden ska målas i rött."]})
+    )
+
+    assert "Byggnaden ska målas i rött." in md

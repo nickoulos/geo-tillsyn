@@ -53,6 +53,19 @@ LOVARKIV_KATALOG = Path(__file__).resolve().parents[2] / "data" / "synthetic" / 
 REGELVERK_KALLA_URL = "https://rkrattsdb.gov.se/SFSdoc/98/980808.PDF"
 
 
+def _kalla_url(p: Path) -> str:
+    """Render a källa path repo-relative when possible (portable, no local-fs leak).
+
+    Committed-archive paths (under the repo root) render as a repo-relative
+    posix path; tmp-path test records fall back to a file:// URI.
+    """
+    rot = Path(__file__).resolve().parents[2]
+    try:
+        return p.resolve().relative_to(rot).as_posix()
+    except ValueError:
+        return p.as_uri()
+
+
 def _getfeature_url(ows_url: str, type_name: str, bbox: tuple) -> str:
     params = {
         "service": "WFS",
@@ -571,6 +584,14 @@ def _fall3_underlag(
     ]
     datering = datera_byggnad(bilder_for_datering, footprint, bbox_foot)
 
+    if lov.godkant_lage.distance(footprint) > 5.0:
+        avstand = lov.godkant_lage.distance(footprint)
+        osakerheter.append(
+            "Kopplingen lov–byggnad är inte säkerställd: det godkända läget ligger "
+            f"{avstand:.0f} m från den valda byggnaden — kontrollera att ärendet "
+            "avser denna byggnad."
+        )
+
     delta = jamfor_lage(lov.godkant_lage, footprint, granser)
 
     tolkat = None
@@ -596,18 +617,20 @@ def _fall3_underlag(
     )
 
     osakerheter.append(_LOVARKIV_OSAKERHET)
+    osakerheter.append(
+        "Byggnadens höjd och utseende kan inte kontrolleras mot lovet — flygbilder "
+        "ser inte fasader (snedbilder saknas i prototypfasen)."
+    )
 
     return {
         "lov": lov,
         "byggnad_id": byggnad_id,
-        "building_feature": building_feature,
         "footprint": footprint,
         "bbox_sok": bbox_sok,
         "bbox_foot": bbox_foot,
         "bilder": bilder,
         "datering": datering,
         "delta": delta,
-        "tolkat": tolkat,
         "tolkat_anmarkningar": tolkat_anmarkningar,
         "korsjamforelse": korsjamforelse,
         "lage": lage,
@@ -625,6 +648,15 @@ def _varld_till_pixel(punkter, bbox, storlek):
     ]
 
 
+def _exteriorer(geom):
+    """Yield exterior rings for a Polygon or MultiPolygon — never .exterior directly."""
+    if hasattr(geom, "geoms"):
+        for del_ in geom.geoms:
+            yield del_.exterior
+    else:
+        yield geom.exterior
+
+
 def _rita_overlay(godkant, verkligt, bbox_foot, bilder) -> Image.Image:
     """Overlay godkänt (blue) vs verkligt (red) läge on the last tidslinje image."""
     basbild = None
@@ -638,11 +670,10 @@ def _rita_overlay(godkant, verkligt, bbox_foot, bilder) -> Image.Image:
     storlek = basbild.size
     rita = ImageDraw.Draw(basbild)
 
-    godkant_px = _varld_till_pixel(list(godkant.exterior.coords), bbox_foot, storlek)
-    verkligt_px = _varld_till_pixel(list(verkligt.exterior.coords), bbox_foot, storlek)
-
-    rita.polygon(godkant_px, outline=(40, 80, 255), width=3)
-    rita.polygon(verkligt_px, outline=(230, 40, 40), width=3)
+    for ring in _exteriorer(godkant):
+        rita.polygon(_varld_till_pixel(list(ring.coords), bbox_foot, storlek), outline=(40, 80, 255), width=3)
+    for ring in _exteriorer(verkligt):
+        rita.polygon(_varld_till_pixel(list(ring.coords), bbox_foot, storlek), outline=(230, 40, 40), width=3)
     rita.text((5, 5), "BLÅ = godkänt läge, RÖD = verkligt läge", fill=(0, 0, 0))
 
     return basbild
@@ -696,7 +727,7 @@ def kor_fall3(
     if underlag["korsjamforelse"] is not None:
         handling_kalla = Kalla(
             beskrivning=f"Skannad handling, ärende {lov.dnr}",
-            url=lov.handling.as_uri(),
+            url=_kalla_url(lov.handling),
             hamtad=nu,
         )
 
@@ -713,7 +744,6 @@ def kor_fall3(
             f"Fall 3 — lovavvikelse? Byggnad {underlag['byggnad_id']} vid "
             f"E {e:.0f}, N {n:.0f} ({CRS})"
         ),
-        byggnad_id=underlag["byggnad_id"],
         lov=lov,
         korsjamforelse=underlag["korsjamforelse"],
         tolkat_anmarkningar=underlag["tolkat_anmarkningar"],
@@ -722,7 +752,7 @@ def kor_fall3(
         lage=underlag["lage"],
         lov_kalla=Kalla(
             beskrivning=f"Lovarkiv (syntetiskt), ärende {lov.dnr}",
-            url=lov.kalla_fil.as_uri(),
+            url=_kalla_url(lov.kalla_fil),
             hamtad=nu,
         ),
         handling_kalla=handling_kalla,
@@ -844,7 +874,7 @@ def analysera_fall3_punkt(
             },
             {
                 "beskrivning": f"Lovarkiv (syntetiskt), ärende {lov.dnr}",
-                "url": lov.kalla_fil.as_uri(),
+                "url": _kalla_url(lov.kalla_fil),
             },
             {
                 "beskrivning": "PBL/ÄPBL övergångsbestämmelser (SFS 2010:900 p. 2)",
