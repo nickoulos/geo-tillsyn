@@ -91,3 +91,10 @@ def test_mcp_servern_registrerar_verktygen():
     verktyg = {t.name for t in asyncio.run(mcp.list_tools())}
     assert "analysera_strandskydd_vid_punkt" in verktyg
     assert "generera_dossier" in verktyg
+
+
+def test_lovavvikelse_verktyget_ar_registrerat():
+    from geo_tillsyn.server import mcp
+
+    verktyg = [t.name for t in asyncio.run(mcp.list_tools())]
+    assert "analysera_lovavvikelse_vid_punkt" in verktyg

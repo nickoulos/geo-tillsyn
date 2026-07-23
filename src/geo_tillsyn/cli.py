@@ -9,7 +9,7 @@ import argparse
 from datetime import UTC, datetime
 from pathlib import Path
 
-from geo_tillsyn.runner import kor_fall1, kor_fall7
+from geo_tillsyn.runner import kor_fall1, kor_fall3, kor_fall7
 
 SUNDSVALL_OWS = "https://karta.sundsvall.se/geoserver/ows"
 
@@ -30,9 +30,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--fall",
         type=int,
-        choices=[7, 1],
+        choices=[7, 1, 3],
         default=7,
-        help="fall 7 (strandskydd, standard) eller fall 1 (olovligt byggande)",
+        help=(
+            "fall 7 (strandskydd, standard), fall 1 (olovligt byggande) "
+            "eller fall 3 (lovavvikelse)"
+        ),
     )
     args = parser.parse_args(argv)
 
@@ -40,6 +43,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.fall == 1:
         dossier = kor_fall1(
+            ows_url=args.ows,
+            punkt=(args.easting, args.northing),
+            ut_katalog=args.ut,
+            nu=nu,
+            radie_m=args.radie,
+            ar=args.ar,
+        )
+    elif args.fall == 3:
+        dossier = kor_fall3(
             ows_url=args.ows,
             punkt=(args.easting, args.northing),
             ut_katalog=args.ut,

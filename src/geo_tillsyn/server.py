@@ -16,7 +16,12 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
-from geo_tillsyn.runner import analysera_fall1_punkt, analysera_punkt, kor_fall7
+from geo_tillsyn.runner import (
+    analysera_fall1_punkt,
+    analysera_fall3_punkt,
+    analysera_punkt,
+    kor_fall7,
+)
 
 SUNDSVALL_OWS = "https://karta.sundsvall.se/geoserver/ows"
 
@@ -146,6 +151,40 @@ def analysera_olovligt_byggande_vid_punkt(
         osäkerheter och käll-URL:er.
     """
     return analysera_fall1_punkt(
+        ows_url=SUNDSVALL_OWS,
+        punkt=(easting, northing),
+        nu=_nu(),
+        radie_m=radie_m,
+    )
+
+
+@mcp.tool()
+def analysera_lovavvikelse_vid_punkt(
+    easting: float,
+    northing: float,
+    radie_m: float = 100.0,
+) -> dict:
+    """Analysera avvikelse från beviljat bygglov vid en kartpunkt (Fall 3).
+
+    Hämtar (syntetiskt) lov ur testarkivet, korskontrollerar den skannade
+    handlingen (OCR) mot registerposten, kvantifierar avvikelsen mellan
+    godkänt och verkligt läge (area, placering, avstånd till gräns), daterar
+    färdigställandet via ortofoto-tidslinjen och bedömer PBL-klockorna.
+    Vilken lag som styr lovet avgörs av ärendets start (ÄPBL före 2011-05-02).
+    Lovuppgifterna kommer ur ett SYNTETISKT testarkiv — prototypfasen har
+    ingen åtkomst till kommunens ärendesystem. Systemet gör en bedömning —
+    beslutet fattas av handläggaren.
+
+    Args:
+        easting: E-koordinat i EPSG:3014 (SWEREF99 17 15, kommunlagrens CRS).
+        northing: N-koordinat i EPSG:3014.
+        radie_m: Sökradie i meter runt punkten (standard 100).
+
+    Returns:
+        Kompakt JSON: lov, korskontroll, kvantifierad avvikelse, klockor,
+        osäkerheter och käll-URL:er.
+    """
+    return analysera_fall3_punkt(
         ows_url=SUNDSVALL_OWS,
         punkt=(easting, northing),
         nu=_nu(),
