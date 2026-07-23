@@ -5,6 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 from __future__ import annotations
 
+import io
 from datetime import date
 from pathlib import Path
 from typing import Callable
@@ -12,14 +13,19 @@ from urllib.parse import urlencode
 
 from mcp_ogc.tools.wfs import query_wfs_features
 
+from PIL import Image, ImageDraw
 from shapely.geometry import Point, shape
 
 from geo_tillsyn.analysis import analysera_strandskydd
 from geo_tillsyn.datering import datera_byggnad
+from geo_tillsyn.delta import jamfor_lage
 from geo_tillsyn.dossier import Kalla, render_markdown
 from geo_tillsyn.fall1 import bygg_fall1_dossier
+from geo_tillsyn.fall3 import bygg_fall3_dossier
 from geo_tillsyn.fall7 import bygg_dossier
-from geo_tillsyn.juridik import fall1_lage, juridiskt_lage
+from geo_tillsyn.juridik import fall1_lage, fall3_lage, juridiskt_lage
+from geo_tillsyn.lovarkiv import hitta_lov
+from geo_tillsyn.lovtolk import korsjamfor, tolka_handling
 from geo_tillsyn.timeline import hamta_tidslinje
 
 BYGGNAD_LAYER = "SundsvallsKommun:bal_byggnad_yta"
@@ -34,6 +40,12 @@ KOMPLETTERANDE_REGELLAGER = [
 ]
 
 CRS = "EPSG:3014"  # native CRS of the kommun's WFS layers
+
+FASTIGHETSGRANS_LAYER = "SundsvallsKommun:FastighetGrans_linje"
+
+# Synthetic mock-ByggR archive (Fall 3) — no real ärendesystem is reachable in
+# the prototype; see lovarkiv.py's docstring for the ärlighet contract.
+LOVARKIV_KATALOG = Path(__file__).resolve().parents[2] / "data" / "synthetic" / "lovarkiv"
 
 # Miljöbalken as official PDF (rkrattsdb covers SFS 1998:306-2018:159) — every
 # time-aware regime fact in the dossier cites primary law, not our dataset.
@@ -483,6 +495,355 @@ def analysera_fall1_punkt(
             },
             {
                 "beskrivning": "PBL lovbefrielser + preskription (SFS 2010:900)",
+                "url": "https://rkrattsdb.gov.se/SFSdoc/10/100900.PDF",
+            },
+        ],
+        "hamtad": nu,
+    }
+
+
+# Prototype honesty: the lov archive is a SYNTETISKT mock-ByggR testarkiv, not
+# the kommunens verkliga ärendesystem — every Fall 3 result must say so.
+_LOVARKIV_OSAKERHET = (
+    "Lovuppgifterna kommer ur ett SYNTETISKT testarkiv (mock-ByggR) — "
+    "prototypfasen har ingen åtkomst till kommunens ärendesystem."
+)
+
+_INGET_LOV_MEDDELANDE = (
+    "Inget ärende i (test)arkivet för punkten — se Fall 1-analysen för lovplikt."
+)
+
+
+def _fall3_underlag(
+    ows_url: str,
+    punkt: tuple[float, float],
+    nu: str,
+    radie_m: float,
+    ar: list[int] | None,
+    hamta_wfs: Callable,
+    hamta_wms: Callable | None,
+    lovarkiv_katalog: Path,
+    ocr: Callable | None,
+):
+    """Fetch + analyse everything both Fall 3 entry points need."""
+    e, n = punkt
+    bbox_sok = (e - radie_m, n - radie_m, e + radie_m, n + radie_m)
+
+    byggnader = hamta_wfs(ows_url, BYGGNAD_LAYER, bbox=bbox_sok, max_features=500)
+    building_feature = _valj_byggnad(byggnader, punkt, radie_m)
+    byggnad_id = str(building_feature.get("id"))
+    footprint = shape(building_feature["geometry"])
+
+    lov = hitta_lov(lovarkiv_katalog, punkt=punkt)
+    if lov is None:
+        return {"lov": None, "byggnad_id": byggnad_id, "bbox_sok": bbox_sok}
+
+    minx, miny, maxx, maxy = footprint.bounds
+    bbox_foot = (minx - 30.0, miny - 30.0, maxx + 30.0, maxy + 30.0)
+
+    osakerheter: list[str] = []
+    granser = None
+    try:
+        granser_fc = hamta_wfs(
+            ows_url, FASTIGHETSGRANS_LAYER, bbox=bbox_sok, max_features=200
+        )
+        granser = [shape(f["geometry"]) for f in granser_fc.get("features", [])]
+    except Exception:
+        granser = None
+        osakerheter.append(
+            f"{FASTIGHETSGRANS_LAYER} kunde inte hämtas (källan otillgänglig) — "
+            "avstånd till fastighetsgräns har inte kunnat kontrolleras."
+        )
+
+    tidslinje_kwargs = {"hamta": hamta_wms} if hamta_wms is not None else {}
+    bilder = hamta_tidslinje(ows_url, bbox_foot, crs=CRS, ar=ar, **tidslinje_kwargs)
+
+    # Same re-flag idiom as _fall1_underlag: the datering core's own tom-check
+    # (any bytes at all) replaces the byte-size heuristic, which doesn't
+    # transfer to the tight footprint crop used here.
+    bilder_for_datering = [
+        type(bild)(ar=bild.ar, layer=bild.layer, png=bild.png, misstankt_tom=not bild.png)
+        for bild in bilder
+    ]
+    datering = datera_byggnad(bilder_for_datering, footprint, bbox_foot)
+
+    delta = jamfor_lage(lov.godkant_lage, footprint, granser)
+
+    tolkat = None
+    korsjamforelse = None
+    if lov.handling is not None and lov.handling.exists():
+        tolkat = tolka_handling(lov.handling.read_bytes(), ocr=ocr)
+        if tolkat.tillganglig:
+            korsjamforelse = korsjamfor(tolkat, lov)
+    else:
+        osakerheter.append(
+            "Ingen skannad handling i ärendet — korskontroll ej möjlig."
+        )
+
+    tolkat_anmarkningar = list(tolkat.anmarkningar) if tolkat is not None else []
+
+    bedomningsdatum = date.fromisoformat(nu[:10])
+    lage = fall3_lage(
+        beslutsdatum=date.fromisoformat(lov.beslutsdatum),
+        sista_ar_utan=datering.sista_ar_utan,
+        forsta_ar_med=datering.forsta_ar_med,
+        bedomningsdatum=bedomningsdatum,
+        delta=delta,
+    )
+
+    osakerheter.append(_LOVARKIV_OSAKERHET)
+
+    return {
+        "lov": lov,
+        "byggnad_id": byggnad_id,
+        "building_feature": building_feature,
+        "footprint": footprint,
+        "bbox_sok": bbox_sok,
+        "bbox_foot": bbox_foot,
+        "bilder": bilder,
+        "datering": datering,
+        "delta": delta,
+        "tolkat": tolkat,
+        "tolkat_anmarkningar": tolkat_anmarkningar,
+        "korsjamforelse": korsjamforelse,
+        "lage": lage,
+        "granser": granser,
+        "osakerheter": osakerheter,
+    }
+
+
+def _varld_till_pixel(punkter, bbox, storlek):
+    minx, miny, maxx, maxy = bbox
+    bredd, hojd = storlek
+    return [
+        ((x - minx) / (maxx - minx) * bredd, (maxy - y) / (maxy - miny) * hojd)
+        for x, y in punkter
+    ]
+
+
+def _rita_overlay(godkant, verkligt, bbox_foot, bilder) -> Image.Image:
+    """Overlay godkänt (blue) vs verkligt (red) läge on the last tidslinje image."""
+    basbild = None
+    for bild in reversed(bilder):
+        if bild.png:
+            basbild = Image.open(io.BytesIO(bild.png)).convert("RGB")
+            break
+    if basbild is None:
+        basbild = Image.new("RGB", (512, 512), color="white")
+
+    storlek = basbild.size
+    rita = ImageDraw.Draw(basbild)
+
+    godkant_px = _varld_till_pixel(list(godkant.exterior.coords), bbox_foot, storlek)
+    verkligt_px = _varld_till_pixel(list(verkligt.exterior.coords), bbox_foot, storlek)
+
+    rita.polygon(godkant_px, outline=(40, 80, 255), width=3)
+    rita.polygon(verkligt_px, outline=(230, 40, 40), width=3)
+    rita.text((5, 5), "BLÅ = godkänt läge, RÖD = verkligt läge", fill=(0, 0, 0))
+
+    return basbild
+
+
+def kor_fall3(
+    ows_url: str,
+    punkt: tuple[float, float],
+    ut_katalog: Path,
+    nu: str,
+    radie_m: float = 100.0,
+    ar: list[int] | None = None,
+    hamta_wfs: Callable = query_wfs_features,
+    hamta_wms: Callable | None = None,
+    lovarkiv_katalog: Path = LOVARKIV_KATALOG,
+    ocr: Callable | None = None,
+) -> Path:
+    """Run the Fall 3 slice around a point and write fall3_dossier.md + overlay.png.
+
+    Args:
+        ows_url: GeoServer OWS endpoint.
+        punkt: (easting, northing) in EPSG:3014 — the handläggare's map click.
+        ut_katalog: Output directory (created if missing).
+        nu: ISO timestamp stamped on every källa (injected: scripts stay
+            deterministic and testable).
+        radie_m: Half-side of the square search box for the target building, metres.
+        ar: Ortofoto years for the tidslinje (default: all 18 verified).
+        hamta_wfs / hamta_wms: Fetchers, injectable for tests.
+        lovarkiv_katalog: Directory of synthetic lov JSON records (mock-ByggR).
+        ocr: OCR callable, injectable for tests (default: tesseract).
+
+    Returns:
+        Path to the written fall3_dossier.md.
+
+    Raises:
+        ValueError: no (test)ärende matches the point in the lovarkiv.
+    """
+    underlag = _fall3_underlag(
+        ows_url, punkt, nu, radie_m, ar, hamta_wfs, hamta_wms, lovarkiv_katalog, ocr
+    )
+    if underlag["lov"] is None:
+        raise ValueError(
+            "Inget (test)ärende i lovarkivet matchar punkten "
+            f"E {punkt[0]:.0f}, N {punkt[1]:.0f} — se Fall 1-analysen för lovplikt."
+        )
+
+    e, n = punkt
+    lov = underlag["lov"]
+
+    handling_kalla = None
+    if underlag["korsjamforelse"] is not None:
+        handling_kalla = Kalla(
+            beskrivning=f"Skannad handling, ärende {lov.dnr}",
+            url=lov.handling.as_uri(),
+            hamtad=nu,
+        )
+
+    grans_kalla = None
+    if underlag["granser"] is not None:
+        grans_kalla = Kalla(
+            beskrivning=f"{FASTIGHETSGRANS_LAYER} (WFS)",
+            url=_getfeature_url(ows_url, FASTIGHETSGRANS_LAYER, underlag["bbox_sok"]),
+            hamtad=nu,
+        )
+
+    dossier = bygg_fall3_dossier(
+        rubrik=(
+            f"Fall 3 — lovavvikelse? Byggnad {underlag['byggnad_id']} vid "
+            f"E {e:.0f}, N {n:.0f} ({CRS})"
+        ),
+        byggnad_id=underlag["byggnad_id"],
+        lov=lov,
+        korsjamforelse=underlag["korsjamforelse"],
+        tolkat_anmarkningar=underlag["tolkat_anmarkningar"],
+        delta=underlag["delta"],
+        datering=underlag["datering"],
+        lage=underlag["lage"],
+        lov_kalla=Kalla(
+            beskrivning=f"Lovarkiv (syntetiskt), ärende {lov.dnr}",
+            url=lov.kalla_fil.as_uri(),
+            hamtad=nu,
+        ),
+        handling_kalla=handling_kalla,
+        byggnad_kalla=Kalla(
+            f"{BYGGNAD_LAYER} (WFS)",
+            _getfeature_url(ows_url, BYGGNAD_LAYER, underlag["bbox_sok"]),
+            hamtad=nu,
+        ),
+        grans_kalla=grans_kalla,
+        tidslinje_kalla=Kalla("Ortofoto-tidslinje 1960–2023 (WMS)", ows_url, hamtad=nu),
+        regelverk_kalla=Kalla(
+            "PBL/ÄPBL övergångsbestämmelser + preskription (regelverk_vid)",
+            "https://rkrattsdb.gov.se/SFSdoc/10/100900.PDF",
+            hamtad=nu,
+            referens="SFS 2010:900 p. 2",
+        ),
+        extra_osakerheter=underlag["osakerheter"],
+    )
+
+    ut_katalog.mkdir(parents=True, exist_ok=True)
+    tidslinje_katalog = ut_katalog / "tidslinje"
+    tidslinje_katalog.mkdir(exist_ok=True)
+    bilder = underlag["bilder"]
+    for bild in bilder:
+        (tidslinje_katalog / f"ortofoto_{bild.ar}.png").write_bytes(bild.png)
+
+    overlay = _rita_overlay(
+        lov.godkant_lage, underlag["footprint"], underlag["bbox_foot"], bilder
+    )
+    overlay.save(ut_katalog / "overlay.png")
+
+    md = render_markdown(dossier)
+    md += "\n## Bilaga: ortofoto-tidslinje\n\n"
+    for bild in bilder:
+        flagga = " ⚠ misstänkt tom bild (kontrollera täckning)" if bild.misstankt_tom else ""
+        md += f"- [{bild.ar}](tidslinje/ortofoto_{bild.ar}.png) — {bild.layer}{flagga}\n"
+    md += "\n## Bilaga: överlagring\n\n"
+    md += "- [overlay.png](overlay.png) — BLÅ = godkänt läge, RÖD = verkligt läge\n"
+
+    dossier_fil = ut_katalog / "fall3_dossier.md"
+    dossier_fil.write_text(md, encoding="utf-8")
+    return dossier_fil
+
+
+def analysera_fall3_punkt(
+    ows_url: str,
+    punkt: tuple[float, float],
+    nu: str,
+    radie_m: float = 100.0,
+    ar: list[int] | None = None,
+    hamta_wfs: Callable = query_wfs_features,
+    hamta_wms: Callable | None = None,
+    lovarkiv_katalog: Path = LOVARKIV_KATALOG,
+    ocr: Callable | None = None,
+) -> dict:
+    """Compact, MCP-friendly Fall 3 analysis (lovavvikelse?) at a point.
+
+    Returns plain JSON-serialisable data: delta godkänt vs verkligt läge,
+    time-aware PBL position, declared uncertainties and källa URLs. Never
+    geometry, never imagery — references only.
+    """
+    underlag = _fall3_underlag(
+        ows_url, punkt, nu, radie_m, ar, hamta_wfs, hamta_wms, lovarkiv_katalog, ocr
+    )
+
+    if underlag["lov"] is None:
+        return {
+            "lov_hittat": False,
+            "byggnad_id": underlag["byggnad_id"],
+            "punkt": {"easting": punkt[0], "northing": punkt[1], "crs": CRS},
+            "meddelande": _INGET_LOV_MEDDELANDE,
+            "osakerheter": [_LOVARKIV_OSAKERHET],
+            "hamtad": nu,
+        }
+
+    lov = underlag["lov"]
+    delta = underlag["delta"]
+    lage = underlag["lage"]
+    datering = underlag["datering"]
+
+    osakerheter = (
+        list(datering.anmarkningar)
+        + list(lage.matningskritiska)
+        + list(lage.atgarder)
+        + list(delta.anmarkningar)
+        + list(underlag["tolkat_anmarkningar"])
+        + list(underlag["osakerheter"])
+    )
+
+    def _r(x):
+        return round(x, 1) if x is not None else None
+
+    return {
+        "byggnad_id": underlag["byggnad_id"],
+        "punkt": {"easting": punkt[0], "northing": punkt[1], "crs": CRS},
+        "lov_hittat": True,
+        "dnr": lov.dnr,
+        "beslutsdatum": lov.beslutsdatum,
+        "pbl_vid_beslut": lage.pbl_vid_beslut,
+        "overgangsregel_tillampad": lage.overgangsregel_tillampad,
+        "godkand_area_m2": _r(delta.godkand_area_m2),
+        "verklig_area_m2": _r(delta.verklig_area_m2),
+        "area_diff_m2": _r(delta.area_diff_m2),
+        "area_diff_procent": _r(delta.area_diff_procent),
+        "utanfor_godkant_m2": _r(delta.utanfor_godkant_m2),
+        "avstand_grans_godkant_m": _r(delta.avstand_grans_godkant_m),
+        "avstand_grans_verklig_m": _r(delta.avstand_grans_verklig_m),
+        "korsjamforelse": underlag["korsjamforelse"],
+        "sista_ar_utan": datering.sista_ar_utan,
+        "forsta_ar_med": datering.forsta_ar_med,
+        "rattelse_preskriberad": lage.rattelse_preskriberad,
+        "sanktionsavgift_mojlig": lage.sanktionsavgift_mojlig,
+        "matningskritiska": lage.matningskritiska,
+        "osakerheter": osakerheter,
+        "kallor": [
+            {
+                "beskrivning": f"{BYGGNAD_LAYER} (WFS)",
+                "url": _getfeature_url(ows_url, BYGGNAD_LAYER, underlag["bbox_sok"]),
+            },
+            {
+                "beskrivning": f"Lovarkiv (syntetiskt), ärende {lov.dnr}",
+                "url": lov.kalla_fil.as_uri(),
+            },
+            {
+                "beskrivning": "PBL/ÄPBL övergångsbestämmelser (SFS 2010:900 p. 2)",
                 "url": "https://rkrattsdb.gov.se/SFSdoc/10/100900.PDF",
             },
         ],
