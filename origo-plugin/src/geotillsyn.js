@@ -9,6 +9,10 @@ import Origo from 'Origo';
  * evaluator below is a thin demo-side duplicate; in Sprint 3 the panel calls
  * the mcp-regelverk HTTP service instead and this duplicate is deleted.
  *
+ * v0.3 — Språk: SV/EN toggle on the panel. Only the UI chrome (our own labels)
+ * is translated; statutory names from regler.json (SFS titles, "friggebod",
+ * lagrum) are official Swedish terms and stay verbatim in both languages.
+ *
  * Also: "identify fastighet" button — map click -> WMS GetFeatureInfo
  * (the verified point-in-polygon on karta.sundsvall.se, docs/data-findings.md §1).
  */
@@ -34,6 +38,57 @@ const DEFAULT_ARSLAGER = {
   2023: 'Lantmateriet:Orto2023_wms'
 };
 
+/* --- i18n: our own UI chrome only; statutory terms stay Swedish --- */
+
+const TEXTS = {
+  sv: {
+    tidslinjeAria: 'Tidslinje',
+    sliderAria: 'Välj årtal för ortofoto och regelverk',
+    identifieraTooltip: 'Geo-Tillsyn: identifiera fastighet',
+    sprakKnapp: 'EN',
+    sprakKnappAria: 'Switch to English',
+    lag: 'Lag',
+    lovbefrielser: 'Lovbefrielser',
+    inga: 'inga',
+    strandskydd: 'Strandskydd',
+    ssGaller: '<b>gäller</b> inom zon (dispens krävs — lovbefrielse ger inte dispens)',
+    ssFinnsInte: (d) => `<b>fanns inte än</b> (generellt strandskydd infördes ${d})`,
+    preskription: 'Preskription',
+    preskriptionText: (ar, slut, harLopt) =>
+      `åtgärd från ${ar} — tioårsregeln löper ut <b>${slut}</b> `
+      + `(${harLopt ? 'har löpt ut' : 'löper ännu'}; strandskydd preskriberas aldrig)`,
+    regelmodellEjLaddad: 'regelmodell ej laddad',
+    fastighet: 'Fastighet',
+    saknarBeteckning: '(saknar beteckning)',
+    ingenFastighet: 'Ingen fastighet på denna punkt.',
+    felHamtning: 'Fel vid hämtning.',
+    modalTitel: 'Geo-Tillsyn'
+  },
+  en: {
+    tidslinjeAria: 'Timeline',
+    sliderAria: 'Select year for orthophoto and legislation',
+    identifieraTooltip: 'Geo-Tillsyn: identify property',
+    sprakKnapp: 'SV',
+    sprakKnappAria: 'Byt till svenska',
+    lag: 'Act',
+    lovbefrielser: 'Permit exemptions',
+    inga: 'none',
+    strandskydd: 'Shoreline protection',
+    ssGaller: '<b>applies</b> within zone (dispensation required — a permit exemption does not grant dispensation)',
+    ssFinnsInte: (d) => `<b>did not yet exist</b> (general shoreline protection introduced ${d})`,
+    preskription: 'Limitation',
+    preskriptionText: (ar, slut, harLopt) =>
+      `measure from ${ar} — the ten-year rule expires <b>${slut}</b> `
+      + `(${harLopt ? 'has expired' : 'still running'}; shoreline protection never lapses)`,
+    regelmodellEjLaddad: 'rule model not loaded',
+    fastighet: 'Property',
+    saknarBeteckning: '(no designation)',
+    ingenFastighet: 'No property at this point.',
+    felHamtning: 'Error while fetching.',
+    modalTitel: 'Geo-Tillsyn'
+  }
+};
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (ch) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -55,24 +110,24 @@ function regelverkVid(regler, isoDate) {
   return { pbl, befrielser, ssGaller, tioarSlut };
 }
 
-function renderKontext(regler, isoDate) {
+function renderKontext(regler, isoDate, t) {
   const r = regelverkVid(regler, isoDate);
   const idag = new Date().getFullYear();
   const rows = [];
   rows.push(`<b>${escapeHtml(isoDate)}</b>`);
   rows.push(r.pbl
-    ? `Lag: <b>${escapeHtml(r.pbl.namn)}</b> (${escapeHtml(r.pbl.sfs)})`
-    : 'Lag: —');
+    ? `${t.lag}: <b>${escapeHtml(r.pbl.namn)}</b> (${escapeHtml(r.pbl.sfs)})`
+    : `${t.lag}: —`);
   const bef = r.befrielser
     .map((b) => `${escapeHtml(b.namn)} ${escapeHtml(b.max_kvm)} m²`)
     .join(', ');
-  rows.push(`Lovbefrielser: ${bef || 'inga'}`);
+  rows.push(`${t.lovbefrielser}: ${bef || t.inga}`);
   rows.push(r.ssGaller
-    ? 'Strandskydd: <b>gäller</b> inom zon (dispens krävs — lovbefrielse ger inte dispens)'
-    : `Strandskydd: <b>fanns inte än</b> (generellt strandskydd infördes ${escapeHtml(regler.strandskydd.generellt_fran)})`);
+    ? `${t.strandskydd}: ${t.ssGaller}`
+    : `${t.strandskydd}: ${t.ssFinnsInte(escapeHtml(regler.strandskydd.generellt_fran))}`);
   const preskriberad = idag > r.tioarSlut;
-  rows.push(`Preskription: åtgärd från ${escapeHtml(isoDate.slice(0, 4))} — tioårsregeln löper ut <b>${escapeHtml(r.tioarSlut)}</b>`
-    + ` (${preskriberad ? 'har löpt ut' : 'löper ännu'}; strandskydd preskriberas aldrig)`);
+  rows.push(`${t.preskription}: `
+    + t.preskriptionText(escapeHtml(isoDate.slice(0, 4)), escapeHtml(r.tioarSlut), preskriberad));
   return rows.map((row) => `<div class="gt-row">${row}</div>`).join('');
 }
 
@@ -83,10 +138,10 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     owsUrl = 'https://karta.sundsvall.se/geoserver/ows',
     fastighetLayer = 'SundsvallsKommun:Fastighet_yta',
     fbetProperty = 'FBET',
-    buttonTooltip = 'Geo-Tillsyn: identifiera fastighet',
     arslager = DEFAULT_ARSLAGER,
     reglerUrl = 'regler.json',
-    startAr = 2023
+    startAr = 2023,
+    sprak = 'sv'
   } = options;
 
   const icon = '#ic_search_24px';
@@ -97,6 +152,12 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
   let active = false;
   let regler = null;
   let panelEl = null;
+  let aktivtSprak = TEXTS[sprak] ? sprak : 'sv';
+  let aktuelltAr = startAr;
+
+  function t() {
+    return TEXTS[aktivtSprak];
+  }
 
   function buildGetFeatureInfoUrl(coordinate, crsCode, half = 40) {
     const [e, n] = coordinate;
@@ -128,14 +189,14 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       const json = await resp.json();
       const feat = json.features && json.features[0];
       content = feat
-        ? `<b>Fastighet:</b> ${escapeHtml(feat.properties[fbetProperty] || '(saknar beteckning)')}`
-        : 'Ingen fastighet på denna punkt.';
+        ? `<b>${t().fastighet}:</b> ${escapeHtml(feat.properties[fbetProperty] || t().saknarBeteckning)}`
+        : t().ingenFastighet;
     } catch (err) {
       console.error('geotillsyn: GetFeatureInfo failed', err);
-      content = 'Fel vid hämtning.';
+      content = t().felHamtning;
     }
     const modal = Origo.ui.Modal({
-      title: 'Geo-Tillsyn',
+      title: t().modalTitel,
       content,
       target: viewer.getId()
     });
@@ -152,6 +213,7 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
   /* --- tidslinje --- */
 
   function visaAr(year) {
+    aktuelltAr = year;
     years.forEach((y) => {
       const layer = viewer.getLayer(arslager[y]);
       if (layer) layer.setVisible(y === year);
@@ -159,16 +221,44 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     const kontextEl = panelEl.querySelector('.gt-kontext');
     const isoDate = `${year}-07-01`;
     kontextEl.innerHTML = regler
-      ? renderKontext(regler, isoDate)
-      : `<div class="gt-row"><b>${year}</b> (regelmodell ej laddad)</div>`;
+      ? renderKontext(regler, isoDate, t())
+      : `<div class="gt-row"><b>${year}</b> (${t().regelmodellEjLaddad})</div>`;
     panelEl.querySelector('.gt-ar').textContent = String(year);
+  }
+
+  function byggPanelInnehall() {
+    const startIndex = Math.max(years.indexOf(aktuelltAr), 0);
+    return `
+      <div style="display:flex;align-items:center;gap:0.75rem">
+        <span class="gt-ar" style="font-size:1.4rem;font-weight:bold;min-width:3.2rem">${years[startIndex]}</span>
+        <input class="gt-slider" type="range" min="0" max="${years.length - 1}"
+               step="1" value="${startIndex}" style="flex:1"
+               aria-label="${t().sliderAria}">
+        <span style="color:#666">${years[0]}–${years[years.length - 1]}</span>
+        <button class="gt-sprak" type="button" aria-label="${t().sprakKnappAria}"
+                style="cursor:pointer;border:1px solid #999;background:#fff;border-radius:0.35rem;padding:0.15rem 0.5rem;font:inherit;font-weight:bold">${t().sprakKnapp}</button>
+      </div>
+      <div class="gt-kontext" style="margin-top:0.4rem;line-height:1.45"></div>`;
+  }
+
+  function kopplaPanelHandlers() {
+    panelEl.querySelector('.gt-slider').addEventListener('input', (evt) => {
+      visaAr(years[Number(evt.target.value)]);
+    });
+    panelEl.querySelector('.gt-sprak').addEventListener('click', () => {
+      aktivtSprak = aktivtSprak === 'sv' ? 'en' : 'sv';
+      panelEl.setAttribute('aria-label', t().tidslinjeAria);
+      panelEl.innerHTML = byggPanelInnehall();
+      kopplaPanelHandlers();
+      visaAr(aktuelltAr);
+    });
   }
 
   function buildPanel() {
     const el = document.createElement('div');
     el.className = 'gt-panel';
     el.setAttribute('role', 'region');
-    el.setAttribute('aria-label', 'Tidslinje');
+    el.setAttribute('aria-label', t().tidslinjeAria);
     el.style.cssText = [
       'position:absolute', 'left:50%', 'bottom:2.5rem',
       'transform:translateX(-50%)', 'width:min(680px, 92%)',
@@ -176,19 +266,9 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       'box-shadow:0 2px 8px rgba(0,0,0,0.35)', 'padding:0.6rem 1rem',
       'z-index:30', 'font-family:inherit', 'font-size:0.8rem'
     ].join(';');
-    const startIndex = Math.max(years.indexOf(startAr), 0);
-    el.innerHTML = `
-      <div style="display:flex;align-items:center;gap:0.75rem">
-        <span class="gt-ar" style="font-size:1.4rem;font-weight:bold;min-width:3.2rem">${years[startIndex]}</span>
-        <input class="gt-slider" type="range" min="0" max="${years.length - 1}"
-               step="1" value="${startIndex}" style="flex:1"
-               aria-label="Välj årtal för ortofoto och regelverk">
-        <span style="color:#666">${years[0]}–${years[years.length - 1]}</span>
-      </div>
-      <div class="gt-kontext" style="margin-top:0.4rem;line-height:1.45"></div>`;
-    el.querySelector('.gt-slider').addEventListener('input', (evt) => {
-      visaAr(years[Number(evt.target.value)]);
-    });
+    el.innerHTML = byggPanelInnehall();
+    panelEl = el;
+    kopplaPanelHandlers();
     return el;
   }
 
@@ -201,7 +281,7 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
           toggleActive();
         },
         icon,
-        tooltipText: buttonTooltip,
+        tooltipText: t().identifieraTooltip,
         tooltipPlacement: 'east'
       });
     },
@@ -210,14 +290,14 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       if (!target) target = `${viewer.getMain().getNavigation().getId()}`;
       this.addComponents([button]);
       this.render();
-      panelEl = buildPanel();
+      buildPanel();
       document.getElementById(viewer.getId()).appendChild(panelEl);
       fetch(reglerUrl)
         .then((resp) => resp.json())
-        .then((json) => { regler = json; visaAr(startAr); })
+        .then((json) => { regler = json; visaAr(aktuelltAr); })
         .catch((err) => {
           console.error('geotillsyn: could not load regler.json', err);
-          visaAr(startAr);
+          visaAr(aktuelltAr);
         });
     },
     render() {
