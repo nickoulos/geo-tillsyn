@@ -1,0 +1,88 @@
+{
+  "syntetisk": true,
+  "anmarkning": "Syntetiskt testärende — inga verkliga byggärenden (prototypfas).",
+  "dnr": "SBN 2009-0412",
+  "fastighet": "ALNÖ-USLAND 1:45",
+  "beslutsdatum": "2009-06-19",
+  "laga_kraft": "2009-07-24",
+  "atgard": "Nybyggnad av enbostadshus",
+  "byggnadsarea_m2": 235.2,
+  "hojd_m": null,
+  "godkant_lage": {
+    "crs": "EPSG:3014",
+    "koordinater": [
+      [
+        158128.43,
+        6918377.76
+      ],
+      [
+        158126.66,
+        6918377.46
+      ],
+      [
+        158126.51,
+        6918378.18
+      ],
+      [
+        158125.06,
+        6918378.93
+      ],
+      [
+        158124.31,
+        6918380.09
+      ],
+      [
+        158124.6,
+        6918381.46
+      ],
+      [
+        158125.7,
+        6918382.61
+      ],
+      [
+        158125.54,
+        6918383.51
+      ],
+      [
+        158127.2,
+        6918383.83
+      ],
+      [
+        158125.61,
+        6918392.6
+      ],
+      [
+        158134.75,
+        6918394.3
+      ],
+      [
+        158136.4,
+        6918385.53
+      ],
+      [
+        158138.92,
+        6918386.01
+      ],
+      [
+        158140.1,
+        6918379.91
+      ],
+      [
+        158137.56,
+        6918379.39
+      ],
+      [
+        158138.78,
+        6918372.85
+      ],
+      [
+        158129.61,
+        6918371.18
+      ]
+    ]
+  },
+  "villkor": [
+    "Byggnaden placeras minst 10,0 m från fastighetsgräns."
+  ],
+  "handling": "sbn-2009-0412-situationsplan.pdf"
+}
