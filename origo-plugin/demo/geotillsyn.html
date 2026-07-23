@@ -16,7 +16,8 @@
 	origo.on('load', function (viewer) {
 		viewer.addComponent(GeoTillsyn({
 			owsUrl: 'https://karta.sundsvall.se/geoserver/ows',
-			fastighetLayer: 'SundsvallsKommun:Fastighet_yta'
+			fastighetLayer: 'SundsvallsKommun:Fastighet_yta',
+			apiUrl: 'http://localhost:8464'
 		}));
 	});
 </script>

@@ -16,7 +16,7 @@
       "options": {
         "buttonText": "Om Geo-Tillsyn",
         "title": "Geo-Tillsyn — demo",
-        "content": "<p>Prototyp för Govtech4all Pilot 3 (Sundsvalls kommun). Dra i tidslinjen längst ner för att byta ortofoto-årgång och se vilket regelverk som gällde. Klicka på sökknappen och sedan på en fastighet för att identifiera den.</p>"
+        "content": "<p>Prototyp för Govtech4all Pilot 3 (Sundsvalls kommun). Dra i tidslinjen längst ner för att byta ortofoto-årgång och se vilket regelverk som gällde. Klicka på sökknappen, välj Fall 1/3/7 och klicka sedan på en fastighet för att både identifiera den och köra en live tillsyn-analys mot geo-tillsyn-backend. Fall 3 ritar även godkänt/verkligt läge som en kartöverlagring.</p>"
       }
     }
   ],
