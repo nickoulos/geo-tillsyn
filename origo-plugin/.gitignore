@@ -1,0 +1,5 @@
+# Build output — reproducible via `npm run build` (webpack.prod.js).
+# The demo build dir is assembled locally from the Origo clone (origo.js, css,
+# img) plus demo/ config; none of it is source and none belongs in the repo.
+build/
+node_modules/
