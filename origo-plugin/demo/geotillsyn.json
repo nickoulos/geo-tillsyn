@@ -32,13 +32,13 @@
     },
     {
       "code": "EPSG:3014",
-      "projection": "+proj=tm +lat_0=0 +lon_0=17.25 +k=1 +x_0=150000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
+      "projection": "+proj=tmerc +lat_0=0 +lon_0=17.25 +k=1 +x_0=150000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
     }
   ],
   "projectionExtent": [181896, 6101648, 1086313, 7689478],
   "extent": [540000, 6840000, 720000, 6990000],
-  "center": [624526, 6917930],
-  "zoom": 11,
+  "center": [624740, 6917830],
+  "zoom": 13,
   "resolutions": [4096, 2048, 1024, 512, 256, 128, 64, 32, 16, 8, 4, 2, 1, 0.5, 0.25],
   "featureinfoOptions": { "infowindow": "overlay" },
   "source": {

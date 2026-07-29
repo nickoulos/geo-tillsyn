@@ -142,7 +142,7 @@ function escapeHtml(value) {
 // backend-koordinaterna är alltid 3014, kartprojektionen i geotillsyn.json är
 // 3006 — pluginet måste registrera 3014 hos proj4 innan Origo.ol.proj.transform
 // (eller GeoJSON-läsningen) kan konvertera mellan dem.
-const EPSG_3014_DEF = '+proj=tm +lat_0=0 +lon_0=17.25 +k=1 +x_0=150000 +y_0=0 '
+const EPSG_3014_DEF = '+proj=tmerc +lat_0=0 +lon_0=17.25 +k=1 +x_0=150000 +y_0=0 '
   + '+ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs';
 
 const FALL_ENDPOINTS = {
@@ -399,33 +399,62 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     return ol;
   }
 
-  // Registrerar EPSG:3014 (SWEREF99 17 15) hos proj4 så att koordinat-
-  // transform 3006<->3014 och GeoJSON-läsning med dataProjection 'EPSG:3014'
-  // fungerar. Origo bundlar proj4 och exponerar den normalt via Origo.ol.proj.proj4;
-  // om den saknas loggas ett tydligt fel och pluginet fortsätter (ingen krasch),
-  // men Fall 3-overlayen och 3006->3014-klicket kommer då inte fungera.
+  // Kontrollerar att EPSG:3014 (SWEREF99 17 15) går att projicera till/från.
+  // Normalvägen är att Origo registrerar den åt oss: `proj4Defs` i kartkonfigu-
+  // rationen körs genom `registerProjections` vid start. Origos UMD-bundle
+  // exponerar däremot INTE `ol.proj` (bara geom/format/layer/source/style/...),
+  // så vi kan varken läsa proj4-instansen eller fråga `ol.proj.get` — därför
+  // verifieras registreringen med en riktig omprojektion i stället för en
+  // API-koll. Saknas proj4Defs helt loggas ett tydligt fel och pluginet
+  // fortsätter utan krasch, men klick-analysen och Fall 3-overlayen uteblir.
   let epsg3014Registrerad = false;
+  function projicera(coordinate, from, till) {
+    const ol = getOl();
+    if (!ol) return null;
+    if (ol.proj && typeof ol.proj.transform === 'function') {
+      return ol.proj.transform(coordinate, from, till);
+    }
+    // GeoJSON-formatet gör samma omprojektion som ol.proj.transform, och är
+    // det enda som Origo faktiskt exponerar.
+    const obj = new ol.format.GeoJSON().writeGeometryObject(
+      new ol.geom.Point(coordinate),
+      { featureProjection: from, dataProjection: till }
+    );
+    return obj && obj.coordinates ? obj.coordinates : null;
+  }
+
   function registreraEpsg3014() {
     const ol = getOl();
     if (!ol) return false;
+
+    // Egen registrering först, om proj4 mot förmodan är exponerad.
     const proj4 = (ol.proj && ol.proj.proj4) || (typeof window !== 'undefined' && window.proj4) || null;
     if (proj4 && typeof proj4.defs === 'function') {
       try {
         proj4.defs('EPSG:3014', EPSG_3014_DEF);
-        if (ol.proj && typeof ol.proj.get === 'function' && !ol.proj.get('EPSG:3014')) {
-          // Vissa OL-byggen kräver att proj4-projektionerna registreras uttryckligen hos ol/proj.
-          if (typeof ol.proj.setProj4 === 'function') ol.proj.setProj4(proj4);
-        }
-        epsg3014Registrerad = true;
-        return true;
       } catch (err) {
         console.error('geotillsyn: kunde inte registrera EPSG:3014 hos proj4', err);
-        return false;
       }
     }
-    console.error('geotillsyn: hittar ingen proj4-instans (Origo.ol.proj.proj4 / window.proj4) — '
-      + 'EPSG:3014 kunde inte registreras. Fall 3-overlay och koordinatkonvertering kommer inte fungera.');
-    return false;
+
+    // Verifiera med en omprojektion: en okänd projektion ger antingen ett
+    // undantag eller oförändrade koordinater — båda betyder "ej registrerad".
+    try {
+      const from = viewer.getProjection().getCode();
+      const provpunkt = viewer.getMap().getView().getCenter();
+      const ut = projicera(provpunkt, from, 'EPSG:3014');
+      epsg3014Registrerad = !!ut
+        && (Math.abs(ut[0] - provpunkt[0]) > 1 || Math.abs(ut[1] - provpunkt[1]) > 1);
+    } catch (err) {
+      epsg3014Registrerad = false;
+    }
+
+    if (!epsg3014Registrerad) {
+      console.error('geotillsyn: EPSG:3014 är inte registrerad i kartan — lägg till den '
+        + 'under `proj4Defs` i kartkonfigurationen. Klick-analys och Fall 3-overlay '
+        + 'kommer inte fungera.');
+    }
+    return epsg3014Registrerad;
   }
 
   function buildGetFeatureInfoUrl(coordinate, crsCode, half = 40) {
@@ -464,12 +493,12 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       console.error('geotillsyn: GetFeatureInfo failed', err);
       content = t().felHamtning;
     }
-    const modal = Origo.ui.Modal({
-      title: t().modalTitel,
-      content,
-      target: viewer.getId()
-    });
-    modal.render();
+    // Skrivs in i panelen, INTE i en modal: Origos modal lägger en
+    // helskärms-`o-modal-screen` över kartan som blockerar fallväljaren tills
+    // den stängs — vid varje kartklick. Fastighetsbeteckningen hör dessutom
+    // ihop med dossiern och ska synas samtidigt som den.
+    const el = panelEl && panelEl.querySelector('.gt-fastighet');
+    if (el) el.innerHTML = content;
   }
 
   /* --- REST-analys (Fall 1/3/7): klick -> 3006->3014 -> /api/* -> dossier --- */
@@ -479,7 +508,7 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     if (!ol || !epsg3014Registrerad) return null;
     const from = viewer.getProjection().getCode();
     try {
-      return ol.proj.transform(coordinate, from, 'EPSG:3014');
+      return projicera(coordinate, from, 'EPSG:3014');
     } catch (err) {
       console.error('geotillsyn: koordinattransform till EPSG:3014 misslyckades', err);
       return null;
@@ -636,12 +665,28 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
 
   /* --- tidslinje --- */
 
+  // Origo registrerar lagren under namnet UTAN workspace-prefix
+  // ('Orto2023_wms', inte 'Lantmateriet:Orto2023_wms'), medan konfigurationen
+  // och arslager använder det fullständiga namnet. Slå upp båda — annars
+  // returnerar getLayer undefined och tidslinjen byter aldrig ortofoto.
+  function hittaLager(namn) {
+    return viewer.getLayer(namn) || viewer.getLayer(namn.split(':').pop());
+  }
+
   function visaAr(year) {
     aktuelltAr = year;
+    let bytteLager = false;
     years.forEach((y) => {
-      const layer = viewer.getLayer(arslager[y]);
-      if (layer) layer.setVisible(y === year);
+      const layer = hittaLager(arslager[y]);
+      if (layer) {
+        layer.setVisible(y === year);
+        if (y === year) bytteLager = true;
+      }
     });
+    if (!bytteLager) {
+      console.warn(`geotillsyn: hittade inget ortofotolager för ${year} `
+        + `(${arslager[year]}) — kartbilden byts inte.`);
+    }
     const kontextEl = panelEl.querySelector('.gt-kontext');
     const isoDate = `${year}-07-01`;
     kontextEl.innerHTML = regler
@@ -682,6 +727,7 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
         <button class="gt-fallknapp" type="button" data-fall="fall7"
                 style="${fallKnappStil('fall7')}">${t().fall7Knapp}</button>
       </div>
+      <div class="gt-fastighet" style="margin-top:0.4rem"></div>
       <div class="gt-analys" style="margin-top:0.4rem;line-height:1.45;max-height:40vh;overflow-y:auto">
         <div class="gt-row">${escapeHtml(t().klickaKarta)}</div>
       </div>`;
