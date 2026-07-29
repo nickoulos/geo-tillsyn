@@ -5,7 +5,8 @@
   "main": "src/geotillsyn.js",
   "scripts": {
     "start": "webpack-dev-server --config ./tasks/webpack.dev.js --mode development",
-    "build": "webpack --config ./tasks/webpack.prod.js"
+    "build": "webpack --config ./tasks/webpack.prod.js",
+    "test": "node --test \"tests/**/*.test.mjs\""
   },
   "license": "AGPL-3.0-or-later",
   "devDependencies": {

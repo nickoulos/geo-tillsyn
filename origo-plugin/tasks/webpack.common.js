@@ -8,6 +8,6 @@ module.exports = {
   },
   externals: ['Origo'],
   resolve: {
-    extensions: ['*', '.js']
+    extensions: ['*', '.js', '.mjs']
   }
 };
