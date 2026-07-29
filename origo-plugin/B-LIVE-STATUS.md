@@ -3,6 +3,31 @@
 **Datum:** 2026-07-23 · **Status:** Kopplat och verifierat till den grad som är
 möjlig utan mänsklig webbläsarinteraktion. Screencast görs manuellt.
 
+## v0.5 UX-redesign (2026-07-30)
+
+Handläggar-UX i stället för demopanel — samma backend, samma endpoints:
+
+- **Dockad sidopanel** (höger, fullhöjd, kollapsbar till flik) med
+  produktidentitet, tomläge som förklarar verktyget, SV/EN-knapp och alltid
+  synlig fot: "Beslutet fattas alltid av handläggaren."
+- **Ett klick, hel granskning:** fallväljaren "Fall 1/3/7" är borta. Ett
+  kartklick kör `/api/olovligt`, `/api/lovavvikelse` (+ geometri-overlay)
+  och `/api/strandskydd` parallellt och renderar tre kontrollkort
+  ("Byggnad utan lov", "Avvikelse från bygglov", "Strandskydd") med neutral
+  faktarubrik, hopfällbar Fakta (klickbara källor), öppen Bedömning och
+  bärnstensfärgade osäkerheter. 404 = ärligt "hittades inte"-info; nätfel =
+  felkort med "Försök igen" per kort.
+- **Tidslinjepill** nere i kartytan: ‹ ›-steg, proportionell slider som
+  snappar till de 18 faktiska fotoårgångarna (luckorna syns som ticks),
+  expanderbar "Regelverk"-rad (sammanfattning + detalj ur regler.json).
+- **Kartlegend** för Fall 3-överlägget (godkänt blått / verkligt rött).
+- **Injicerad design-token-stylesheet** — inga inline-stilar.
+- Källkoden är uppdelad i moduler (`i18n.mjs`, `dossier.mjs`,
+  `regelverk.mjs`, `tidslinje-logik.mjs`, `styles.mjs`, `panel.js`,
+  `timeline.js`); de rena modulerna testas med `npm test` (node --test).
+
+Körinstruktionerna nedan gäller oförändrat.
+
 ## Vad som är gjort
 
 Origo-pluginet (`src/geotillsyn.js`) är kopplat till geo-tillsyn-serverns

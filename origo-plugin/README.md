@@ -5,10 +5,12 @@ byggt enligt [barebone-mönstret](https://github.com/origo-map/barebone-plugin)
 (fristående bundle, `externals: ['Origo']`, ingen fork). Se
 [ADR-002](../docs/adr/002-origo-plugin.md).
 
-**Nuläge (Spike B):** hello-world — knapp i navigationen som togglar
-"identifiera fastighet"-läge; klick på kartan → GetFeatureInfo mot
-`karta.sundsvall.se` → fastighetsbeteckning i modal.
-Kommande: dossier-vy (Sprint 2), tidslinje (Sprint 3), regelgraf-vy (Sprint 5).
+**Nuläge (v0.5):** dockad sidopanel med ett-klicks granskning — ett kartklick
+kör alla tre kontrollerna (`/api/olovligt`, `/api/lovavvikelse`,
+`/api/strandskydd`) parallellt och renderar kontrollkort med neutral rubrik,
+Fakta/Bedömning/Källor och osäkerheter; tidslinjepill med regelverks-expander;
+Fall 3-överlägg (godkänt/verkligt läge) med kartlegend; SV/EN.
+Se `B-LIVE-STATUS.md` för körning och `npm test` för de rena modulerna.
 
 ## Utveckling
 
