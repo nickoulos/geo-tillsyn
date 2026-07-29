@@ -203,7 +203,18 @@ export function cssText() {
 .gt-tidslinje__regeltoggle:hover { color: var(--gt-ink); }
 .gt-tidslinje__regeltoggle .gt-chevron { margin-left: auto; flex: none; transition: transform .15s ease; }
 .gt-tidslinje__regeltoggle[aria-expanded="true"] .gt-chevron { transform: rotate(180deg); }
-.gt-tidslinje__regeldetalj { padding: .2rem .45rem .35rem; font-size: 12.5px; }
+.gt-regel-sammanfattning { flex: 1; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.gt-tidslinje__regeldetalj { padding: .3rem .45rem .45rem; font-size: 12.5px;
+  max-height: 40vh; overflow-y: auto; }
+.gt-regelrubrik { font-size: 12px; font-weight: 700; margin-bottom: .1rem; }
+.gt-regelnot { font-size: 11px; color: var(--gt-ink-svag); margin-bottom: .35rem; }
+
+/* staplade rader (etikett över värde) — för meningslånga värden som regelverket */
+.gt-rad--stack { display: block; padding: .3rem 0; }
+.gt-rad--stack .gt-rad__etikett { display: block; font-size: 10.5px; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; }
+.gt-rad--stack .gt-rad__varde { display: block; text-align: left; font-weight: 400; }
 
 /* ---------- kartlegend (Fall 3-overlay) ---------- */
 .gt-legend { position: absolute; bottom: 1.1rem; left: 1.1rem; z-index: 39;

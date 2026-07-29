@@ -32,8 +32,10 @@ export function renderKontextSammanfattning(regler, isoDate, t) {
 export function renderKontextDetalj(regler, isoDate, t) {
   const r = regelverkVid(regler, isoDate);
   const idag = new Date().getFullYear();
+  // Staplade rader (etikett över värde): regelverksvärdena är meningar, inte
+  // mätvärden — högerställda tabellrader blir oläsliga här.
   const rad = (etikett, vardeHtml) =>
-    `<div class="gt-rad"><span class="gt-rad__etikett">${escapeHtml(etikett)}</span>`
+    `<div class="gt-rad gt-rad--stack"><span class="gt-rad__etikett">${escapeHtml(etikett)}</span>`
     + `<span class="gt-rad__varde">${vardeHtml}</span></div>`;
 
   const rows = [];

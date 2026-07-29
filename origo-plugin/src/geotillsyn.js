@@ -352,7 +352,9 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
   }
 
   async function pahandlaKlick(evt) {
-    if (kollapsad) return;
+    // Ett kartklick är alltid en analysbegäran: är panelen ihopfälld öppnas
+    // den — ett klick får aldrig se ut att göra ingenting.
+    if (kollapsad) setKollapsad(false);
     panel.startaAnalys();
     identify(evt);
     const punkt = transformTill3014(evt.coordinate);
@@ -403,10 +405,15 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     }
     const isoDate = `${year}-07-01`;
     tidslinje.setAr(year);
+    const detalj = regler
+      ? `<div class="gt-regelrubrik">${escapeHtml(t().regelverk)} ${year}</div>`
+        + (t().statutNot ? `<div class="gt-regelnot">${escapeHtml(t().statutNot)}</div>` : '')
+        + renderKontextDetalj(regler, isoDate, t())
+      : '';
     tidslinje.setKontext(
       regler ? renderKontextSammanfattning(regler, isoDate, t())
         : `<b>${year}</b> (${escapeHtml(t().regelmodellEjLaddad)})`,
-      regler ? renderKontextDetalj(regler, isoDate, t()) : ''
+      detalj
     );
   }
 
