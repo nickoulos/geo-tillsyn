@@ -27,6 +27,29 @@ skanningsläge över en yta i stället för en punkt:
   (bbox 157843.7,6916367.7,159523.1,6918611.2): 826 byggnader, 271 kandidater,
   topp 10 med poäng 6–7 — ALNÖ-USLAND 1:45 (båda byggnaderna) bland dem.
 
+## Fallback-skärmdumpar + WMS-cache (2026-08-20)
+
+Demomanusets `fallback_akt1..3.png` + `fallback_radar.png` genereras headless:
+
+- **Harness:** `demo/fallback.html` (kopieras till `build/`) kör ett scenario
+  via query-parametrar: `?e=&n=` kartklick (EPSG:3006), `?zoom=`, `?mode=radar`
+  ("Skanna vyn"), `?ar=2007` (årgång efter resultat), `?fokus=<kort>` (scrolla),
+  `?oppna=1` (fäll upp Fakta), `?lang=en`, `?api=<port>`.
+- **Körning:** REST-servern + `npx http-server build -p 9977 -c-1 --cors`, sedan
+  `chrome --headless=new --window-size=1600,900 --virtual-time-budget=150000
+  --screenshot=<ut>.png "http://localhost:9977/fallback.html?..."`.
+  Skärmdumparna 2026-08-20 ligger i `demo_ut/fallback/` och i anbudsmappens
+  `fallbacks/`: Akt 1 (Uppförd 2001–2007 · registret 2014, år 2007 i tidslinjen),
+  Akt 2 (+90,3 m² +38,4 % · SBN 2009-0412, blå/röd överlagring), Akt 3
+  (28 av 73 · Preskriberas Nej per byggnad), Radar (71 kandidater av 252).
+- **WMS-bildcache** (`geodata.hamta_wms_robust`, disk-cache-först): historiska
+  ortofoton är oföränderliga och svaren byte-identiska (data-findings) — andra
+  klicket på samma byggnad går aldrig på nätet (52 s → 17 s varm; kvarvarande
+  tid är WFS live). Nästan tomma svar (WMS:ens tysta felläge) cachas aldrig.
+  Kör ett klick per demo-byggnad dagen före demon så överlever demot GeoServer-
+  hicka; `GEO_TILLSYN_OFFLINE=1` tvingar cache/snapshot.
+- REST-seamens interna fel loggas nu med traceback (`aldrig tyst`).
+
 ## v0.5 UX-redesign (2026-07-30)
 
 Handläggar-UX i stället för demopanel — samma backend, samma endpoints:

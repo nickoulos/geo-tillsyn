@@ -10,6 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 from __future__ import annotations
 
 import argparse
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -32,6 +33,9 @@ from geo_tillsyn.runner import (
 )
 
 SUNDSVALL_OWS = "https://karta.sundsvall.se/geoserver/ows"
+
+# Ett internt fel får aldrig vara tyst: klienten får en kod, loggen får orsaken.
+_logg = logging.getLogger("geo_tillsyn.server")
 
 # Eneo's backend runs in Docker and reaches this server via host.docker.internal;
 # FastMCP's default DNS-rebinding allowlist is localhost-only and answers such
@@ -357,6 +361,7 @@ async def _hantera_analys(request: Request, analysfunktion, default_radie: float
     except ValueError as exc:
         return _json({"fel": _fel(exc)}, status=404)
     except Exception:
+        _logg.exception("internt fel i %s", request.url.path)
         return _json({"fel": M("server.internt_fel")}, status=500)
 
     return _json(resultat)
@@ -401,6 +406,7 @@ async def api_lovavvikelse_geometri(request: Request) -> Response:
     except ValueError as exc:
         return _json({"fel": _fel(exc)}, status=404)
     except Exception:
+        _logg.exception("internt fel i %s", request.url.path)
         return _json({"fel": M("server.internt_fel")}, status=500)
 
     return _json(resultat)
@@ -419,6 +425,7 @@ async def api_snedbild(request: Request) -> Response:
     try:
         oversikt = snedbild.snedbilder_vid_punkt(easting, northing, datum=datum)
     except Exception:
+        _logg.exception("internt fel i %s", request.url.path)
         return _json({"fel": M("server.internt_fel")}, status=500)
     # Pluginet behöver bara riktning/datum — position/storlek är serverns sak.
     if oversikt.get("tillganglig"):
@@ -447,6 +454,7 @@ async def api_snedbild_bild(request: Request) -> Response:
     try:
         png = snedbild.utsnitt_vid_punkt(easting, northing, riktning, datum=datum, zoom=zoom)
     except Exception:
+        _logg.exception("internt fel i %s", request.url.path)
         return _json({"fel": M("server.internt_fel")}, status=500)
     if png is None:
         return _json({"fel": M("runner.snedbilder_otillgangliga")}, status=404)
@@ -490,6 +498,7 @@ async def api_radar(request: Request) -> Response:
         # För stor zon / ogiltig ruta: ett deklarerat nej, inte ett serverfel.
         return _json({"fel": _fel(exc)}, status=400)
     except Exception:
+        _logg.exception("internt fel i %s", request.url.path)
         return _json({"fel": M("server.internt_fel")}, status=500)
     return _json(resultat)
 

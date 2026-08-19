@@ -10,6 +10,8 @@ from typing import Callable, Protocol
 
 from mcp_ogc.tools.wms import get_wms_map
 
+from geo_tillsyn.geodata import hamta_wms_robust
+
 # Verified live against karta.sundsvall.se 2026-07-16: all 18 vintages return
 # imagery without auth (Lantmäteriet data re-served by the kommun's GeoServer).
 ORTOFOTO_LAYERS: dict[int, str] = {
@@ -41,7 +43,11 @@ class TidslinjeBild:
 
 
 def _standard_hamta(wms_url, layer, bbox, crs, width, height) -> bytes:
-    return get_wms_map(wms_url, layer=layer, bbox=bbox, crs=crs, width=width, height=height)
+    # Cache-först: historiska årgångar är oföränderliga (se hamta_wms_robust).
+    return hamta_wms_robust(
+        wms_url, layer=layer, bbox=bbox, crs=crs, width=width, height=height,
+        hamta=get_wms_map,
+    )
 
 
 def hamta_tidslinje(

@@ -115,3 +115,65 @@ def test_offline_utan_cache_ar_ett_arligt_fel(tmp_path):
 
 def test_kalla_typ_for_frammande_svar_ar_live_utan_datum():
     assert geodata.kalla_typ({"type": "FeatureCollection", "features": []}) == ("live", None)
+
+
+# --- WMS-bildcache (ortofoto-tidslinjen) ---------------------------------------
+
+
+def test_wms_cache_first_for_immutabla_ortofoton(tmp_path):
+    """Historiska årgångar ändras aldrig — andra hämtningen går aldrig på nätet."""
+    anrop = []
+
+    def hamta(wms_url, layer, bbox, crs, width, height):
+        anrop.append(layer)
+        return b"P" * 30_000
+
+    kw = dict(
+        wms_url="http://example.test/ows", layer="Lantmateriet:Orto2015_wms",
+        bbox=(1.0, 2.0, 3.0, 4.0), crs="EPSG:3014", width=512, height=512,
+        hamta=hamta, katalog=tmp_path, offline=False,
+    )
+    forsta = geodata.hamta_wms_robust(**kw)
+    andra = geodata.hamta_wms_robust(**kw)
+
+    assert forsta == andra == b"P" * 30_000
+    assert anrop == ["Lantmateriet:Orto2015_wms"]  # exakt ett nätanrop
+
+
+def test_misstankt_tom_wms_bild_cachas_aldrig(tmp_path):
+    """En nästan tom PNG är WMS:ens tysta felläge — den får inte förgifta cachen."""
+    svar = [b"x" * 5_000, b"P" * 30_000]
+
+    def hamta(wms_url, layer, bbox, crs, width, height):
+        return svar.pop(0)
+
+    kw = dict(
+        wms_url="http://example.test/ows", layer="Lantmateriet:Orto2015_wms",
+        bbox=(1.0, 2.0, 3.0, 4.0), crs="EPSG:3014", width=512, height=512,
+        hamta=hamta, katalog=tmp_path, offline=False,
+    )
+    assert geodata.hamta_wms_robust(**kw) == b"x" * 5_000
+    assert geodata.hamta_wms_robust(**kw) == b"P" * 30_000  # hämtar om, tar det riktiga
+
+
+def test_wms_offline_utan_cache_ar_ett_arligt_fel(tmp_path):
+    with pytest.raises(geodata.GeodataFel):
+        geodata.hamta_wms_robust(
+            wms_url="http://example.test/ows", layer="Lantmateriet:Orto2015_wms",
+            bbox=(1.0, 2.0, 3.0, 4.0), crs="EPSG:3014", width=512, height=512,
+            hamta=lambda *a, **k: (_ for _ in ()).throw(AssertionError("nät i offline")),
+            katalog=tmp_path, offline=True,
+        )
+
+
+def test_wms_cache_nyckeln_skiljer_pa_bbox(tmp_path):
+    def hamta(wms_url, layer, bbox, crs, width, height):
+        return f"bbox={bbox}".encode() + b"0" * 30_000
+
+    kw = dict(
+        wms_url="http://example.test/ows", layer="Lantmateriet:Orto2015_wms",
+        crs="EPSG:3014", width=512, height=512, hamta=hamta, katalog=tmp_path, offline=False,
+    )
+    a = geodata.hamta_wms_robust(bbox=(1.0, 2.0, 3.0, 4.0), **kw)
+    b = geodata.hamta_wms_robust(bbox=(5.0, 6.0, 7.0, 8.0), **kw)
+    assert a != b
