@@ -3,6 +3,30 @@
 **Datum:** 2026-07-23 · **Status:** Kopplat och verifierat till den grad som är
 möjlig utan mänsklig webbläsarinteraktion. Screencast görs manuellt.
 
+## Tillsynsradar (2026-08-19)
+
+Finalen i demomanuset (34:00–39:00) finns nu som kod — samma motor i
+skanningsläge över en yta i stället för en punkt:
+
+- **Backend:** `src/geo_tillsyn/radar.py` — `skanna_zon(bbox)` korsar alla
+  byggnader i rutan med strandskyddszonerna (klippta till rutan: 2 min 38 s →
+  7 s live), bedömer regimen vid uppförandet tidsmedvetet (`juridiskt_lage`)
+  och poängsätter enligt en **öppen modell** (läge +3/+2, strandskyddet gällde
+  vid uppförandet +3, år okänt +1, utvidgat +1; upphävt = källkonflikt, ±0).
+  Varje kandidat bär sina grunder; dispenser deklareras okontrollerade; beslutet
+  är handläggarens (`radar.juridisk_not`). Max 4 km² per skanning (deklarerat nej).
+- **MCP-verktyg** `skanna_strandskyddszon(min_e, min_n, max_e, max_n, max_kandidater=15)`
+  (Eneo) + **REST** `GET /api/radar?bbox=minE,minN,maxE,maxN[&max_kandidater=25]`
+  (EPSG:3014, CORS, 400 med meddelandekod vid för stor/ogiltig ruta).
+- **Plugin:** knappen **"Skanna vyn"** i panelhuvudet skannar den synliga
+  kartvyn, renderar en rangordnad kandidatlista (`src/radar.mjs`, SV/EN) och
+  ritar numrerade markörer som dyker upp en efter en; klick på en rad hoppar
+  dit och kör den vanliga ett-klicks-granskningen; "Till radarlistan" tar
+  tillbaka. `/api/health` räknar nu verktygen dynamiskt.
+- **Live-verifierat 2026-08-19** mot demozonen NW Alnö
+  (bbox 157843.7,6916367.7,159523.1,6918611.2): 826 byggnader, 271 kandidater,
+  topp 10 med poäng 6–7 — ALNÖ-USLAND 1:45 (båda byggnaderna) bland dem.
+
 ## v0.5 UX-redesign (2026-07-30)
 
 Handläggar-UX i stället för demopanel — samma backend, samma endpoints:

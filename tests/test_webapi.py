@@ -29,12 +29,44 @@ def client():
         yield c
 
 
-def test_health_returns_fem_verktyg(client):
+def test_health_raknar_registrerade_verktyg(client):
     r = client.get("/api/health")
 
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "tools": 5}
+    # strandskydd, dossier, olovligt, lovavvikelse, snedbilder, radar — räknas
+    # dynamiskt så att nya verktyg aldrig lämnar hälsokontrollen inaktuell.
+    assert r.json() == {"status": "ok", "tools": 6}
     assert r.headers["access-control-allow-origin"] == "*"
+
+
+def test_radar_anropar_skanna_zon_med_bbox(client, monkeypatch):
+    fanget = {}
+
+    def fake(**kw):
+        fanget.update(kw)
+        return {"kandidater": [], "juridisk_not": Meddelande("radar.juridisk_not")}
+
+    monkeypatch.setattr(server_mod, "skanna_zon", fake)
+
+    r = client.get("/api/radar", params={"bbox": "100,200,300,400", "max_kandidater": "5"})
+
+    assert r.status_code == 200
+    assert fanget["bbox"] == (100.0, 200.0, 300.0, 400.0)
+    assert fanget["max_kandidater"] == 5
+    assert r.json()["juridisk_not"]["kod"] == "radar.juridisk_not"
+    assert r.headers["access-control-allow-origin"] == "*"
+
+
+def test_radar_utan_bbox_ger_400_med_kod(client):
+    r = client.get("/api/radar")
+    assert r.status_code == 400
+    assert r.json()["fel"]["kod"] == "server.bbox_ogiltig"
+
+
+def test_radar_for_stor_zon_ger_400_med_kod(client):
+    r = client.get("/api/radar", params={"bbox": "0,0,10000,10000"})
+    assert r.status_code == 400
+    assert r.json()["fel"]["kod"] == "radar.zon_for_stor"
 
 
 def test_lovavvikelse_returnerar_kompakt_dict(client, monkeypatch):

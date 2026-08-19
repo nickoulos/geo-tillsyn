@@ -34,7 +34,7 @@ GeoServer (karta.sundsvall.se), Lantmäteriet, Länsstyrelsen
 | `dossier/` | Mallar: juridisk + klarspråksversion |
 | `data/synthetic/` | Syntetiska testdata (inga verkliga personuppgifter) |
 | `docs/adr/` | Arkitekturbeslut |
-| `src/geo_tillsyn/` | Körbar Fall 7-skiva: analys, dossier, tidslinje (se nedan) |
+| `src/geo_tillsyn/` | Körbar motor: Fall 1/3/7, dossier, tidslinje, tillsynsradar (`radar.py`) |
 | `tests/` | Hermetisk testsvit för skivan (pytest, inga nätverksanrop) |
 
 ## Körbar skiva — Fall 7 strandskydd

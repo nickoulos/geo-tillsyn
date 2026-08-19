@@ -88,7 +88,7 @@ function rad(key, value, t, sprak, vardeFalt) {
     + `<span class="gt-rad__varde">${formatVarde(value, t, sprak, vardeFalt)}</span></div>`;
 }
 
-function renderKallor(kallor, t, sprak) {
+export function renderKallor(kallor, t, sprak) {
   if (!Array.isArray(kallor) || kallor.length === 0) return '';
   const items = kallor.map((k) => {
     const beskrivning = escapeHtml(k ? meddelandeText(k.beskrivning, sprak) : '');
@@ -102,7 +102,7 @@ function renderKallor(kallor, t, sprak) {
     + `<ul>${items}</ul></div>`;
 }
 
-function renderOsakerheter(osakerheter, t, sprak) {
+export function renderOsakerheter(osakerheter, t, sprak) {
   if (!Array.isArray(osakerheter) || osakerheter.length === 0) return '';
   const items = osakerheter
     .map((o) => `<li>${escapeHtml(meddelandeText(o, sprak))}</li>`).join('');

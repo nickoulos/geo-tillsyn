@@ -9,7 +9,9 @@ byggt enligt [barebone-mönstret](https://github.com/origo-map/barebone-plugin)
 kör alla tre kontrollerna (`/api/olovligt`, `/api/lovavvikelse`,
 `/api/strandskydd`) parallellt och renderar kontrollkort med neutral rubrik,
 Fakta/Bedömning/Källor och osäkerheter; tidslinjepill med regelverks-expander;
-Fall 3-överlägg (godkänt/verkligt läge) med kartlegend; SV/EN.
+Fall 3-överlägg (godkänt/verkligt läge) med kartlegend; SV/EN. **Tillsynsradar**
+("Skanna vyn"): `/api/radar` över synlig kartvy → rangordnad kandidatlista med
+öppen poängmodell + numrerade markörer; klick på kandidat = full granskning.
 Se `B-LIVE-STATUS.md` för körning och `npm test` för de rena modulerna.
 
 ## Utveckling
