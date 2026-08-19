@@ -152,6 +152,7 @@ def bygg_fall3_dossier(
     tidslinje_kalla: Kalla,
     regelverk_kalla: Kalla,
     extra_osakerheter: list[str] | None = None,
+    extra_fakta: list[Fakta] | None = None,
 ) -> Dossier:
     """Assemble the three-level Fall 3 dossier: lov, korskontroll, delta, lag.
 
@@ -204,5 +205,7 @@ def bygg_fall3_dossier(
         grund=grund,
         osakerheter=osakerheter,
     )
+
+    fakta.extend(extra_fakta or [])
 
     return Dossier(rubrik=rubrik, fakta=fakta, bedomningar=[bedomning])

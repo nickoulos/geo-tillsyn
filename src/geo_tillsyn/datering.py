@@ -18,6 +18,7 @@ import numpy as np
 from PIL import Image
 from shapely import contains_xy
 
+from geo_tillsyn.meddelanden import Meddelande as M
 from geo_tillsyn.timeline import TidslinjeBild
 
 # Correlation thresholds against the reference year. Between the two the year
@@ -97,14 +98,11 @@ def datera_byggnad(
     )
     hoppade = sorted(b.ar for b in bilder if b.misstankt_tom)
     if hoppade:
-        anmarkningar.append(
-            f"Årgångar utan användbar bild (hoppade över): {', '.join(map(str, hoppade))}."
-        )
+        anmarkningar.append(M("datering.argangar_utan_bild", ar=hoppade))
 
     if len(anvandbara) < _MINSTA_ANTAL_AR:
         anmarkningar.append(
-            "Datering ej fastställd: för få användbara ortofoto-årgångar "
-            f"({len(anvandbara)} st, minst {_MINSTA_ANTAL_AR} krävs)."
+            M("datering.for_fa_argangar", antal=len(anvandbara), minst=_MINSTA_ANTAL_AR)
         )
         return DateringsResultat(
             None, None, {}, [b.ar for b in anvandbara], anmarkningar
@@ -113,9 +111,7 @@ def datera_byggnad(
     referens_bild = _grayscale(anvandbara[-1].png)
     mask = _footprint_mask(referens_bild.shape, footprint, bbox)
     if not mask.any():
-        anmarkningar.append(
-            "Datering ej fastställd: byggnadens footprint täcker inga pixlar i bilden."
-        )
+        anmarkningar.append(M("datering.footprint_utan_pixlar"))
         return DateringsResultat(None, None, {}, [], anmarkningar)
 
     # Content check: drop near-uniform (no-coverage) vintages BEFORE scoring —
@@ -139,14 +135,12 @@ def datera_byggnad(
 
     if innehallslosa:
         anmarkningar.append(
-            "Årgångar utan bildinnehåll i byggnadens footprint (uteslutna): "
-            f"{', '.join(map(str, sorted(innehallslosa)))}."
+            M("datering.argangar_utan_innehall", ar=sorted(innehallslosa))
         )
     anvandbara = [b for b in anvandbara if b.ar in patchar]
     if len(anvandbara) < _MINSTA_ANTAL_AR:
         anmarkningar.append(
-            "Datering ej fastställd: för få användbara ortofoto-årgångar "
-            f"({len(anvandbara)} st, minst {_MINSTA_ANTAL_AR} krävs)."
+            M("datering.for_fa_argangar", antal=len(anvandbara), minst=_MINSTA_ANTAL_AR)
         )
         return DateringsResultat(
             None, None, {}, [b.ar for b in anvandbara], anmarkningar
@@ -163,10 +157,7 @@ def datera_byggnad(
         ar for ar in poang if not narvaro[ar] and not franvaro[ar]
     ]
     if osakra:
-        anmarkningar.append(
-            "Otydliga årgångar (varken klar närvaro eller frånvaro): "
-            f"{', '.join(map(str, sorted(osakra)))} — manuell granskning rekommenderas."
-        )
+        anmarkningar.append(M("datering.otydliga_argangar", ar=sorted(osakra)))
 
     ar_stigande = [b.ar for b in anvandbara]
 
@@ -186,19 +177,13 @@ def datera_byggnad(
         forsta_ar_med = None
 
     if forsta_ar_med is None:
-        anmarkningar.append(
-            "Datering ej fastställd: byggnaden kan inte beläggas i någon årgång "
-            "utöver referensåret (självmatchning räknas inte som bevis)."
-        )
+        anmarkningar.append(M("datering.ingen_bortom_referensar"))
         return DateringsResultat(None, None, poang, ar_stigande, anmarkningar)
 
     fore = [ar for ar in ar_stigande if ar < forsta_ar_med and franvaro[ar]]
     sista_ar_utan = max(fore) if fore else None
     if sista_ar_utan is None:
-        anmarkningar.append(
-            f"Byggnaden syns redan i äldsta användbara ortofotot ({forsta_ar_med}) "
-            "— ingen undre gräns kan sättas från bildserien."
-        )
+        anmarkningar.append(M("datering.syns_i_aldsta", ar=forsta_ar_med))
 
     return DateringsResultat(
         sista_ar_utan=sista_ar_utan,

@@ -19,6 +19,7 @@ import pypdfium2 as pdfium
 from PIL import Image
 
 from geo_tillsyn.lovarkiv import LovBeslut
+from geo_tillsyn.meddelanden import Meddelande as M
 
 _KONFIDENS_GRANS = 0.5
 
@@ -75,10 +76,7 @@ def tolka_handling(
     except Exception as fel:
         return TolkatDokument(
             tillganglig=False,
-            anmarkningar=[
-                "OCR ej tillgänglig — handlingen kunde inte läsas "
-                f"({type(fel).__name__})."
-            ],
+            anmarkningar=[M("lovtolk.ocr_ej_tillganglig", feltyp=type(fel).__name__)],
         )
 
     falt: dict[str, TolkatFalt] = {}
@@ -90,10 +88,7 @@ def tolka_handling(
 
     anmarkningar: list[str] = []
     if konfidens < _KONFIDENS_GRANS:
-        anmarkningar.append(
-            f"OCR-konfidensen är låg ({konfidens:.2f}) — extraherade fält bör "
-            "kontrolleras mot handlingen manuellt."
-        )
+        anmarkningar.append(M("lovtolk.lag_konfidens", konfidens=konfidens))
     return TolkatDokument(tillganglig=True, falt=falt, ratext=text, anmarkningar=anmarkningar)
 
 

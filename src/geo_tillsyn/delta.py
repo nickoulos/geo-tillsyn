@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 
+from geo_tillsyn.meddelanden import Meddelande as M
+
 
 @dataclass(frozen=True)
 class DeltaResultat:
@@ -42,9 +44,7 @@ def jamfor_lage(
     diff = verklig_area - godkand_area
     procent = (diff / godkand_area * 100.0) if godkand_area else 0.0
     if godkand_area == 0:
-        anmarkningar.append(
-            "Godkänt läge har ingen mätbar yta — procentjämförelse ej möjlig."
-        )
+        anmarkningar.append(M("delta.godkant_utan_yta"))
 
     gc, vc = godkant.centroid, verkligt.centroid
     forskjutning = math.hypot(vc.x - gc.x, vc.y - gc.y)
@@ -56,10 +56,7 @@ def jamfor_lage(
         avstand_verklig = min(verkligt.distance(g) for g in granser)
     else:
         avstand_godkant = avstand_verklig = None
-        anmarkningar.append(
-            "Ingen fastighetsgräns tillgänglig — avstånd till gräns har inte "
-            "kunnat jämföras."
-        )
+        anmarkningar.append(M("delta.ingen_fastighetsgrans"))
 
     return DeltaResultat(
         godkand_area_m2=godkand_area,

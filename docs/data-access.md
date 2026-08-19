@@ -14,12 +14,12 @@ Base endpoint: `https://karta.sundsvall.se/geoserver/ows`
 | Property polygons | `SundsvallsKommun:Fastighet_yta` | **Better than boundary lines for click-to-select.** GetFeature returns MultiPolygon. |
 | Property boundaries | `SundsvallsKommun:FastighetGrans_linje` | As listed in tender xlsx |
 | Property designations | `SundsvallsKommun:FastighetBeteckning_punkt`, `FastighetBeteckningFullstandig_punkt` | For labels/search |
-| Buildings (registry) | `SundsvallsKommun:bal_byggnad_yta`, `td_ovrigbyggnad_yta`, `td_byggnad_linje` | The "expected reality" layer for delta comparison |
+| Buildings (registry) | `SundsvallsKommun:bal_byggnad_yta` (use this), `td_byggnad_linje` | The "expected reality" layer for delta comparison. ⚠ `td_ovrigbyggnad_yta` is DEPRECATED (kommun-confirmed, Aug 2026): folded into `bal_byggnad_yta`; returning 0 features is expected, not a bug |
 | Addresses | `SundsvallsKommun:Adressplats_punkt`, `bal_adressplats_punkt` | |
 | **Strandskydd** | `Lansstyrelsen:Strandskydd_yta` | Verified: returns MultiPolygon zones |
 | **Strandskydd extended (300m)** | `Lansstyrelsen:UtvidgatStrandskydd_yta`, `UtvidgatStrandskydd_linje` | **Bonus find — not in tender xlsx.** Fall 7 nuance. |
 | **Strandskydd revoked** | `Lansstyrelsen:UpphavdaStrandskydd_yta` | **Bonus find.** Areas where protection was lifted — must check before flagging violations. |
-| Detaljplan (vectorised) | `RIGES:DetaljplanGallande_yta`, `DetaljplanGallande_minusNGP_yta`, `AnvandningsBestammelser_*`, `EgenskapsBestammelser_*`, `NGP_Detaljplan_yta` + NGP_* family | Full RIGES + NGP families present |
+| Detaljplan (vectorised) | **Authoritative gällande plan = `NGP_Detaljplan_yta` + `RIGES:DetaljplanGallande_minusNGP_yta`** (kommun-confirmed, Aug 2026). ⚠ `RIGES:DetaljplanGallande_yta` is STALE — do not use for coverage/conformance checks. Also: `AnvandningsBestammelser_*`, `EgenskapsBestammelser_*` + NGP_* family | Full RIGES + NGP families present |
 | Kulturmiljö | `Lansstyrelsen:Kulturmiljoprogram_yta`, `RiksintresseKulturmiljovard_yta`, `Byggnadsminnen_punkt`, `SundsvallsKommun:StenstansinventeringByggnader_yta` | For Fall 5 (vision) |
 | Naturreservat | `Naturvardsverket:Naturreservat_yta` | Fall 7 naturvärden cross-check |
 | Oblique photo footprints | `SundsvallsKommun:Snedbilder_yta` | Coverage polygons only; actual images via MapSpace (key pending) |
@@ -47,6 +47,14 @@ curl "https://karta.sundsvall.se/geoserver/ows?service=WMS&version=1.3.0&request
 
 Layers declare mixed DefaultCRS: **EPSG:3006** (SWEREF99 TM), **EPSG:3013**, **EPSG:3014** (SWEREF99 17 15 — local zone for Sundsvall, false easting 150000). GetFeature on `Fastighet_yta` and `Strandskydd_yta` returned coordinates consistent with EPSG:3014 (x≈150 000, y≈6.91M, axis order northing,easting in WFS 2.0). **Rule: always request an explicit `srsName`/`crs` per call; normalise everything to EPSG:3006 internally.**
 
+### ⚠ Bestämmelse values: MAX rule (kommun-confirmed, Aug 2026)
+
+When a bestämmelse's **vectorised value** (`EgenskapsBestammelser_*` attributes)
+and its **scanned-text value** (OCR from plankarta/planhandling PDFs) disagree,
+**always take the MAX value — never the text string.** Binding parsing rule for
+any plan-conformance code (Fall 2/3); record both values + the rule applied in
+the dossier so the human handläggare sees the discrepancy.
+
 ### ⚠ Spatial filter limitation (verified 2026-07-02)
 
 CQL `INTERSECTS`/`DWITHIN` on this GeoServer **silently match nothing** (0 hits
@@ -70,8 +78,9 @@ curl "https://karta.sundsvall.se/geoserver/ows?service=WFS&version=2.0.0&request
   our live verification above is legitimate.
 - **F3 No real/anonymised historical cases at this stage** — synthetic
   scenarios are the only path (as planned).
-- **F4 ByggR example exports:** "återkommer" (pending from kommun). Align
-  `mcp-bygglov` mock schema when received.
+- **F4 ByggR example exports: RECEIVED 2026-08-19** by e-mail (ArendeExportWS
+  SOAP field list + method list) — see `docs/byggr-arendeexportws.md`. Align
+  `mcp-bygglov` mock keys (trakt + fBetNr, dnr, handelse→handling) accordingly.
 - **F5 MapSpace: the kommun provides THEIR API key** — chase delivery, don't
   procure our own.
 - **F7 `Strandskydd_yta` already contains the buffer zones as geometry** — we
@@ -92,8 +101,8 @@ curl "https://karta.sundsvall.se/geoserver/ows?service=WFS&version=2.0.0&request
 | Source | Status | Action |
 | --- | --- | --- |
 | Lantmäteriet direct APIs (STAC ortofoto download, Belägenhetsadress, Byggnad vektor) | Credentials in local `.env` — untested | Live test — Orestis, Sprint 1 |
-| MapSpace snedbilder (actual oblique images) | Kommun provides their key (F5) | Chase delivery — Nikos |
-| ByggR example exports for mock schema | Kommun "återkommer" (F4) | Watch e-Avrop; align mcp-bygglov schema on arrival |
+| MapSpace snedbilder (actual oblique images) | **Userkey RECEIVED (Aug 2026)** — stored in local `.env` (`MAPSPACE_USERKEY`, gitignored; never commit) | Live-test the oblique image API; snedbilder view now unblocked |
+| ByggR example exports for mock schema | **RECEIVED 2026-08-19** (`docs/byggr-arendeexportws.md`) | Mapping documented; mock stays synthetic |
 | NGP Detaljplaner (national platform) | Needs consumer account; coverage incomplete anyway | Low priority — RIGES layers above cover the demo need |
 | Scanned plan PDFs | URL pattern known: `https://karta.sundsvall.se/Detaljplan/SkannadHandling/2281K-DP-294.pdf` | Verify a handful of plan IDs when picking demo properties |
 

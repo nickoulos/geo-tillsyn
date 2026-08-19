@@ -99,6 +99,16 @@ export function cssText() {
 .gt-tom p { margin: 0 auto; max-width: 30ch; font-size: 12.5px; }
 
 /* ---------- fastighetsrubrik ---------- */
+.gt-snedbild { margin-top: .8rem; padding: .8rem; border: 1px solid var(--gt-kant); border-radius: var(--gt-radie); background: var(--gt-yta); }
+.gt-snedbild__grid { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-top: .5rem; }
+.gt-snedbild__fig { margin: 0; }
+.gt-snedbild__fig img { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 6px; border: 1px solid var(--gt-kant); background: var(--gt-yta-svag); }
+.gt-snedbild__fig figcaption { font-size: 11px; color: var(--gt-ink-svag); margin-top: .2rem; }
+.gt-snedbild__oppna { display: inline-block; text-decoration: none; margin-top: .4rem; }
+.gt-rad--block { display: block; }
+.gt-rattigheter { margin: .2rem 0 0; padding-left: 1.1rem; }
+.gt-rattigheter li { margin: .1rem 0; }
+.gt-rattighet__fast { color: var(--gt-ink-svag); }
 .gt-fastighet { margin-bottom: .8rem; }
 .gt-fastighet__etikett {
   font-size: 10.5px; font-weight: 700; letter-spacing: .08em;

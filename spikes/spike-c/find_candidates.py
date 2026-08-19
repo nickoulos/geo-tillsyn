@@ -41,6 +41,9 @@ POINT_LAYERS = {
     "strandskydd": ("Lansstyrelsen:Strandskydd_yta", "OBJECTID"),
     "utvidgat": ("Lansstyrelsen:UtvidgatStrandskydd_yta", "OBJECTID"),
     "upphavt": ("Lansstyrelsen:UpphavdaStrandskydd_yta", "Beslutsdat"),
+    # STALE layer (kommun, Aug 2026): authoritative gällande plan is
+    # NGP_Detaljplan_yta + DetaljplanGallande_minusNGP_yta. Rerun before
+    # trusting the detaljplan-coverage score for any new candidate.
     "detaljplan": ("RIGES:DetaljplanGallande_yta", "AKTBET"),
     "fastighet": ("SundsvallsKommun:Fastighet_yta", "FBET"),
 }

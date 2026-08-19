@@ -15,6 +15,8 @@ from datetime import date
 from pathlib import Path
 
 from geo_tillsyn.analysis import ZonAnalys
+from geo_tillsyn.meddelanden import Meddelande as M
+from geo_tillsyn.meddelanden import fran_regelverk
 
 
 def _ladda_regelverk_core():
@@ -74,10 +76,7 @@ def juridiskt_lage(
     if byggnads_ar is None:
         gallde = None
         dispens_da = False
-        atgarder.append(
-            "Byggnadens tillkomstår är inte fastställt (bal_nybyggnadsar saknas) — "
-            "datera via ortofoto-tidslinjen innan regelverket vid uppförandet kan avgöras."
-        )
+        atgarder.append(M("juridik.tillkomstar_ej_faststallt_bal"))
     else:
         vid_arets_borjan = _regelverk.regelverk_vid(
             date(byggnads_ar, 1, 1), kontext, bedomningsdatum=bedomningsdatum
@@ -90,9 +89,11 @@ def juridiskt_lage(
             gallde = None
             dispens_da = False
             atgarder.append(
-                f"Byggnadsåret {byggnads_ar} är ikraftträdandeår för strandskyddet "
-                f"({vid_arets_slut['generellt_fran']}) — månad krävs för att avgöra "
-                "vilket regelverk som gällde vid uppförandet."
+                M(
+                    "juridik.byggnadsar_ar_ikrafttradandear",
+                    ar=byggnads_ar,
+                    generellt_fran=vid_arets_slut["generellt_fran"],
+                )
             )
         else:
             gallde = vid_arets_slut["gallde_vid_datum"]
@@ -103,7 +104,7 @@ def juridiskt_lage(
                 date(byggnads_ar, 12, 31), kontext, bedomningsdatum=bedomningsdatum
             )[nyckel].get("atgard")
             if atgard:
-                atgarder.append(atgard)
+                atgarder.append(fran_regelverk(atgard))
 
     return JuridisktLage(
         byggnad_id=analys.byggnad_id,
@@ -181,11 +182,7 @@ def _pbl_klockor(
         rattelse_preskriberad = False
     else:
         rattelse_preskriberad = None
-        atgarder.append(
-            "PBL 11 kap. 20 §-klockan (10 år) löper ut någonstans inom "
-            "dateringsintervallet — konstruktionsåret måste pinpointas för att avgöra "
-            "om rättelse är preskriberad."
-        )
+        atgarder.append(M("juridik.klocka_20_osaker"))
 
     if tidigaste is not None and _plus_ar(tidigaste, 5) >= bedomningsdatum:
         sanktionsavgift_mojlig: bool | None = True
@@ -193,11 +190,7 @@ def _pbl_klockor(
         sanktionsavgift_mojlig = False
     else:
         sanktionsavgift_mojlig = None
-        atgarder.append(
-            "PBL 11 kap. 58 §-klockan (5 år) löper ut någonstans inom "
-            "dateringsintervallet — konstruktionsåret måste pinpointas för att avgöra "
-            "om sanktionsavgift fortfarande är möjlig."
-        )
+        atgarder.append(M("juridik.klocka_58_osaker"))
 
     return rattelse_preskriberad, sanktionsavgift_mojlig, atgarder
 
@@ -222,14 +215,8 @@ def fall1_lage(
 
     if forsta_ar_med is None:
         if inom_strandskydd:
-            atgarder.append(
-                "Strandskyddstillsyn preskriberas aldrig enligt PBL-klockorna (MÖD 2021:6) "
-                "— se Fall 7-analysen för strandskyddsdelen."
-            )
-        atgarder.append(
-            "Byggnadens tillkomstår är inte fastställt — datera via ortofoto-tidslinjen "
-            "innan bygglovsplikt och preskription kan avgöras."
-        )
+            atgarder.append(M("juridik.strandskydd_preskriberas_aldrig"))
+        atgarder.append(M("juridik.tillkomstar_ej_faststallt"))
         return Fall1Lage(
             sista_ar_utan=sista_ar_utan,
             forsta_ar_med=forsta_ar_med,
@@ -244,10 +231,7 @@ def fall1_lage(
 
     if sista_ar_utan is None:
         kandidat_ar = [forsta_ar_med]
-        atgarder.append(
-            "Nedre gränsen för uppförandeåret är okänd (sista_ar_utan saknas) — "
-            "intervallets start kan inte fastställas från ortofoto-tidslinjen."
-        )
+        atgarder.append(M("juridik.undre_grans_okand"))
     else:
         kandidat_ar = list(range(sista_ar_utan + 1, forsta_ar_med + 1))
 
@@ -268,18 +252,11 @@ def fall1_lage(
     else:
         bygglov_kravdes = None
         lovbefrielse = None
-        atgarder.append(
-            "Intervallet för uppförandeåret spänner över en regeländring i "
-            "bygglovsbefrielserna — konstruktionsåret måste pinpointas innan "
-            "bygglovsplikten kan avgöras."
-        )
+        atgarder.append(M("juridik.regelandring_i_intervallet"))
 
     matningskritiskt = any(abs(area_m2 - cap) <= 2.0 for cap in alla_caps)
     if matningskritiskt:
-        atgarder.append(
-            "Bedömningen är mätningskritisk — arean ligger nära en tröskel och måste "
-            "verifieras genom mätning innan handläggaren lägger fast slutsatsen."
-        )
+        atgarder.append(M("juridik.matningskritisk_area"))
 
     rattelse_preskriberad, sanktionsavgift_mojlig, klock_atgarder = _pbl_klockor(
         sista_ar_utan, forsta_ar_med, bedomningsdatum
@@ -287,10 +264,7 @@ def fall1_lage(
     atgarder.extend(klock_atgarder)
 
     if inom_strandskydd:
-        atgarder.append(
-            "Strandskyddstillsyn preskriberas aldrig enligt PBL-klockorna (MÖD 2021:6) "
-            "— se Fall 7-analysen för strandskyddsdelen."
-        )
+        atgarder.append(M("juridik.strandskydd_preskriberas_aldrig"))
 
     return Fall1Lage(
         sista_ar_utan=sista_ar_utan,
@@ -353,14 +327,11 @@ def fall3_lage(
 
     overgangsbestammelse_atgard = vid_beslut_resultat["overgangsbestammelser"].get("atgard")
     if overgangsbestammelse_atgard:
-        atgarder.append(overgangsbestammelse_atgard)
+        atgarder.append(fran_regelverk(overgangsbestammelse_atgard))
 
     if forsta_ar_med is None:
         rattelse, sanktion = None, None
-        atgarder.append(
-            "Färdigställandet är inte daterat — datera via ortofoto-tidslinjen "
-            "innan preskriptionsklockorna kan avgöras."
-        )
+        atgarder.append(M("juridik.fardigstallande_ej_daterat"))
     else:
         rattelse, sanktion, klock_atgarder = _pbl_klockor(
             sista_ar_utan, forsta_ar_med, bedomningsdatum
@@ -371,8 +342,11 @@ def fall3_lage(
     if delta is not None:
         if abs(delta.area_diff_m2) <= _AREA_BAND_M2:
             matningskritiska.append(
-                f"Areaavvikelsen ({delta.area_diff_m2:+.1f} m²) ligger inom "
-                f"mätosäkerheten (±{_AREA_BAND_M2:.0f} m²) — kan inte beläggas utan inmätning."
+                M(
+                    "juridik.matningskritisk_areaavvikelse",
+                    diff_m2=delta.area_diff_m2,
+                    band_m2=_AREA_BAND_M2,
+                )
             )
         if (
             delta.avstand_grans_godkant_m is not None
@@ -381,14 +355,10 @@ def fall3_lage(
             <= _AVSTAND_BAND_M
         ):
             matningskritiska.append(
-                "Skillnaden i avstånd till fastighetsgräns ligger inom mätosäkerheten "
-                f"(±{_AVSTAND_BAND_M:.1f} m) — kan inte beläggas utan inmätning."
+                M("juridik.matningskritisk_avstand", band_m=_AVSTAND_BAND_M)
             )
     if matningskritiska:
-        atgarder.append(
-            "Bedömningen är mätningskritisk — avvikelser inom mätosäkerheten måste "
-            "verifieras genom inmätning innan handläggaren lägger fast slutsatsen."
-        )
+        atgarder.append(M("juridik.matningskritisk_bedomning"))
 
     return Fall3Lage(
         pbl_vid_beslut=pbl_vid_beslut,

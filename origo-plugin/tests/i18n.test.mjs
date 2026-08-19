@@ -1,10 +1,106 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TEXTS, FALT_LABEL, faltLabel, formatTal, teckenTal } from '../src/i18n.mjs';
+import {
+  TEXTS, FALT_LABEL, MEDDELANDEN, VARDE_LABEL,
+  faltLabel, formatTal, meddelandeText, teckenTal, vardeLabel
+} from '../src/i18n.mjs';
 
 test('sv och en har exakt samma nycklar', () => {
   assert.deepEqual(Object.keys(TEXTS.en).sort(), Object.keys(TEXTS.sv).sort());
   assert.deepEqual(Object.keys(FALT_LABEL.en).sort(), Object.keys(FALT_LABEL.sv).sort());
+  assert.deepEqual(Object.keys(MEDDELANDEN.en).sort(), Object.keys(MEDDELANDEN.sv).sort());
+  assert.deepEqual(Object.keys(VARDE_LABEL.en).sort(), Object.keys(VARDE_LABEL.sv).sort());
+  for (const falt of Object.keys(VARDE_LABEL.sv)) {
+    assert.deepEqual(
+      Object.keys(VARDE_LABEL.en[falt]).sort(),
+      Object.keys(VARDE_LABEL.sv[falt]).sort(),
+      `värdena för ${falt} skiljer sig mellan språken`
+    );
+  }
+});
+
+test('varje meddelandekod renderar en icke-tom sträng på båda språken', () => {
+  // Parametrarna nedan täcker varje kod som tar sådana; koder utan parametrar
+  // klarar ett tomt objekt.
+  const params = {
+    'datering.argangar_utan_bild': { ar: [1998, 2002] },
+    'datering.for_fa_argangar': { antal: 2, minst: 3 },
+    'datering.argangar_utan_innehall': { ar: [2012] },
+    'datering.otydliga_argangar': { ar: [2007, 2013] },
+    'datering.syns_i_aldsta': { ar: 1960 },
+    'juridik.byggnadsar_ar_ikrafttradandear': { ar: 1975, generellt_fran: '1975-07-01' },
+    'juridik.matningskritisk_areaavvikelse': { diff_m2: 0.5, band_m2: 2.0 },
+    'juridik.matningskritisk_avstand': { band_m: 0.5 },
+    'lovtolk.ocr_ej_tillganglig': { feltyp: 'ImportError' },
+    'lovtolk.lag_konfidens': { konfidens: 0.42 },
+    'runner.regellager_otillgangligt': { lager: 'Lansstyrelsen:UtvidgatStrandskydd_yta' },
+    'runner.strandskyddslager_otillgangligt': { lager: 'X:y' },
+    'runner.granslager_otillgangligt': { lager: 'X:y' },
+    'runner.upphavt_strandskydd_konflikt': { byggnad_id: 'bal_byggnad_yta.1', referens: '521-1234-2019 (2019-05-02)' },
+    'runner.rattighetslager_otillgangligt': { lager: 'X:y' },
+    'runner.hojd_granska_snedbilder': { ar: [2018, 2022] },
+    'geodata.snapshot_anvant': { lager: 'X:y', hamtad: '2026-08-19T10:00:00Z' },
+    'geodata.cache_anvant': { lager: 'X:y', hamtad: '2026-08-19T10:00:00Z' },
+    'runner.lov_byggnad_koppling_osaker': { avstand_m: 12.4 },
+    'runner.ingen_byggnad_hittad': { radie_m: 100, easting: 1, northing: 2 },
+    'runner.inget_arende_matchar': { easting: 1, northing: 2 },
+    'kalla.lovarkiv_syntetiskt': { dnr: 'SBN 2009-0412' },
+    'kalla.skannad_handling': { dnr: 'SBN 2009-0412' },
+    'server.parametrar_ogiltiga': { detalj: "'easting'" }
+  };
+  for (const sprak of ['sv', 'en']) {
+    for (const kod of Object.keys(MEDDELANDEN.sv)) {
+      const text = meddelandeText({ kod, params: params[kod] || {} }, sprak);
+      assert.equal(typeof text, 'string');
+      assert.ok(text.length > 0, `${kod} (${sprak}) gav tom text`);
+      assert.ok(!text.includes('undefined'), `${kod} (${sprak}) lämnade undefined: ${text}`);
+    }
+  }
+});
+
+test('meddelandeText: ren sträng passerar ordagrant (författningsnamn, lagernamn)', () => {
+  assert.equal(
+    meddelandeText('Miljöbalken 7 kap. (SFS 1998:808)', 'en'),
+    'Miljöbalken 7 kap. (SFS 1998:808)'
+  );
+  assert.equal(meddelandeText('SundsvallsKommun:bal_byggnad_yta (WFS)', 'en'),
+    'SundsvallsKommun:bal_byggnad_yta (WFS)');
+});
+
+test('meddelandeText: okänd kod faller tillbaka på koden, aldrig på tomhet', () => {
+  assert.equal(meddelandeText({ kod: 'inte.en.riktig.kod', params: {} }, 'en'),
+    'inte.en.riktig.kod');
+  assert.equal(meddelandeText(null, 'en'), '');
+});
+
+test('meddelandeText: tal följer språkets decimaltecken', () => {
+  const m = { kod: 'juridik.matningskritisk_avstand', params: { band_m: 0.5 } };
+  assert.match(meddelandeText(m, 'sv'), /±0,5 m/);
+  assert.match(meddelandeText(m, 'en'), /±0\.5 m/);
+});
+
+test('meddelandeText översätter faktiskt — svenskan läcker inte in i engelskan', () => {
+  const koder = [
+    'datering.ingen_bortom_referensar',
+    'juridik.strandskydd_preskriberas_aldrig',
+    'runner.bygglovsregister_saknas',
+    'runner.lovarkiv_syntetiskt'
+  ];
+  for (const kod of koder) {
+    const en = meddelandeText({ kod, params: {} }, 'en');
+    assert.notEqual(en, meddelandeText({ kod, params: {} }, 'sv'));
+    // Svenska särtecken utanför författningsnamn förråder en oöversatt sträng.
+    assert.ok(!/[åä]/.test(en.replace(/MÖD|ÄPBL|Miljöbalken/g, '')),
+      `${kod} ser oöversatt ut på engelska: ${en}`);
+  }
+});
+
+test('vardeLabel: uppräkningar översätts, okänt värde passerar oförändrat', () => {
+  assert.equal(vardeLabel('laege', 'inom', 'en'), 'Inside zone');
+  assert.equal(vardeLabel('laege', 'delvis', 'sv'), 'Delvis inom zon');
+  assert.equal(vardeLabel('korsjamforelse', 'överens', 'en'), 'Matches');
+  assert.equal(vardeLabel('korsjamforelse', 'avviker', 'en'), 'Differs');
+  assert.equal(vardeLabel('laege', 'nytt_varde', 'en'), 'nytt_varde');
 });
 
 test('checkTitel finns för alla tre kontroller på båda språken', () => {

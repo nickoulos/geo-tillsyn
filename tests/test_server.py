@@ -98,3 +98,16 @@ def test_lovavvikelse_verktyget_ar_registrerat():
 
     verktyg = [t.name for t in asyncio.run(mcp.list_tools())]
     assert "analysera_lovavvikelse_vid_punkt" in verktyg
+
+
+def test_snedbildsverktyget_ar_registrerat_och_svarar_arligt_utan_nyckel(monkeypatch, tmp_path):
+    from geo_tillsyn import server
+
+    verktyg = [t.name for t in asyncio.run(server.mcp.list_tools())]
+    assert "hamta_snedbilder_vid_punkt" in verktyg
+    monkeypatch.setattr(
+        server.snedbild, "snedbilder_vid_punkt",
+        lambda e, n, datum=None: {"tillganglig": False, "orsak": "ingen MAPSPACE_USERKEY"},
+    )
+    res = server.hamta_snedbilder_vid_punkt(1.0, 2.0, ut_katalog=str(tmp_path))
+    assert res == {"tillganglig": False, "orsak": "ingen MAPSPACE_USERKEY"}

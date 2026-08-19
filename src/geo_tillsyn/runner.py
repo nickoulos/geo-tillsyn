@@ -11,38 +11,59 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import urlencode
 
-from mcp_ogc.tools.wfs import query_wfs_features
-
 from PIL import Image, ImageDraw
 from shapely import force_2d
 from shapely.geometry import Point, mapping, shape
 
-from geo_tillsyn.analysis import analysera_strandskydd
+from geo_tillsyn.analysis import analysera_strandskydd, komplettera_med_regellager
 from geo_tillsyn.datering import datera_byggnad
 from geo_tillsyn.delta import jamfor_lage
-from geo_tillsyn.dossier import Kalla, render_markdown
+from geo_tillsyn.dossier import Fakta, Kalla, render_markdown
 from geo_tillsyn.fall1 import bygg_fall1_dossier
 from geo_tillsyn.fall3 import bygg_fall3_dossier
 from geo_tillsyn.fall7 import bygg_dossier
+from geo_tillsyn.geodata import hamta_wfs_robust, kalla_typ
 from geo_tillsyn.juridik import fall1_lage, fall3_lage, juridiskt_lage
 from geo_tillsyn.lovarkiv import hitta_lov
 from geo_tillsyn.lovtolk import korsjamfor, tolka_handling
+from geo_tillsyn.meddelanden import Meddelande as M
+from geo_tillsyn import snedbild as _snedbild
 from geo_tillsyn.timeline import hamta_tidslinje
 
 BYGGNAD_LAYER = "SundsvallsKommun:bal_byggnad_yta"
 STRANDSKYDD_LAYER = "SundsvallsKommun:lm_strandskydd_y"
 
-# Complementary RULE layers that legally narrow or widen the zone. Broken
-# server-side on karta.sundsvall.se (GeoServer exception, verified 2026-07-17);
-# the runner still tries them each run and reports failure as uncertainty.
-KOMPLETTERANDE_REGELLAGER = [
-    "Lansstyrelsen:UtvidgatStrandskydd_yta",
-    "Lansstyrelsen:UpphavdaStrandskydd_yta",
-]
+# Complementary RULE layers that legally widen (utvidgat) or lift (upphävt)
+# the zone. Intermittently broken server-side on karta.sundsvall.se (GeoServer
+# shapefile exception, July 2026 — kommun-confirmed); the runner tries them each
+# run (snapshot/cache via geodata.py), reports failure as uncertainty and, when
+# they answer, shows per building which objects it touches — a visible source
+# conflict for the handläggare, never a silent override of the kommun's zone.
+UTVIDGAT_LAYER = "Lansstyrelsen:UtvidgatStrandskydd_yta"
+UPPHAVT_LAYER = "Lansstyrelsen:UpphavdaStrandskydd_yta"
+KOMPLETTERANDE_REGELLAGER = [UTVIDGAT_LAYER, UPPHAVT_LAYER]
 
 CRS = "EPSG:3014"  # native CRS of the kommun's WFS layers
 
 FASTIGHETSGRANS_LAYER = "SundsvallsKommun:FastighetGrans_linje"
+
+# Rättigheter (ledningsrätt, officialservitut) och gemensamhetsanläggningar —
+# Lantmäteriet via kommunens GeoServer (anbudssvar 151260 7d, aug 2026). Ytor
+# och linjer; punktlagren bär inte utbredning och utelämnas. En byggnad som
+# berör en ledningsrätt eller ett servitut är ett faktum för handläggaren att
+# väga in — ingen slutsats dras här.
+RATTIGHET_LAGER = [
+    "Lantmateriet:rk_rattighet_y",
+    "Lantmateriet:rk_rattighet_l",
+    "Lantmateriet:rk_ga_y",
+    "Lantmateriet:rk_ga_l",
+]
+_MAX_RATTIGHETER = 12
+
+# Snedbilder (MapSpace) — seam: tests byter ut mot en stubb (conftest.py) så att
+# sviten aldrig rör nätet även när en MAPSPACE_USERKEY finns i .env.
+SNEDBILDER_VID_PUNKT = _snedbild.snedbilder_vid_punkt
+SNEDBILD_UTSNITT = _snedbild.utsnitt_vid_punkt
 
 # Synthetic mock-ByggR archive (Fall 3) — no real ärendesystem is reachable in
 # the prototype; see lovarkiv.py's docstring for the ärlighet contract.
@@ -93,19 +114,21 @@ def _hamta_underlag(
     strandskydd = hamta_wfs(ows_url, STRANDSKYDD_LAYER, bbox=bbox, max_features=100)
 
     osakerheter: list[str] = []
+    osakerheter += _kallforbehall(byggnader, BYGGNAD_LAYER)
+    osakerheter += _kallforbehall(strandskydd, STRANDSKYDD_LAYER)
+    regellager: dict[str, dict] = {}
     for lager in KOMPLETTERANDE_REGELLAGER:
         try:
-            hamta_wfs(ows_url, lager, bbox=bbox, max_features=100)
+            fc = hamta_wfs(ows_url, lager, bbox=bbox, max_features=100)
         except Exception:
-            osakerheter.append(
-                f"{lager} kunde inte hämtas (källan otillgänglig); "
-                "zonens exakta utbredning är inte fullständigt kontrollerad."
-            )
-    osakerheter.append(
-        "Beviljade strandskyddsdispenser har inte kontrollerats mot dispensregistret."
-    )
+            osakerheter.append(M("runner.regellager_otillgangligt", lager=lager))
+            continue
+        osakerheter += _kallforbehall(fc, lager)
+        regellager[lager] = fc
+    osakerheter.append(M("runner.dispenser_ej_kontrollerade"))
 
     analyser = analysera_strandskydd(byggnader, strandskydd)
+    komplement = komplettera_med_regellager(byggnader, regellager)
 
     ar_per_byggnad = {
         str(f.get("id")): (f.get("properties") or {}).get("bal_nybyggnadsar")
@@ -119,7 +142,31 @@ def _hamta_underlag(
         for analys in analyser
         if analys.laege in ("inom", "delvis")
     }
-    return bbox, byggnader, analyser, juridik, osakerheter
+    return bbox, byggnader, analyser, juridik, osakerheter, komplement
+
+
+def _kallforbehall(fc: dict, lager: str) -> list[str]:
+    """Förbehåll när ett lager inte kom live (ögonblicksbild/stale cache) — aldrig tyst."""
+    typ, hamtad = kalla_typ(fc)
+    if typ == "snapshot":
+        return [M("geodata.snapshot_anvant", lager=lager, hamtad=hamtad or "okänt datum")]
+    if typ == "cache":
+        return [M("geodata.cache_anvant", lager=lager, hamtad=hamtad or "okänt datum")]
+    return []
+
+
+def _upphavt_konflikter(komplement: dict, analyser) -> list[str]:
+    """En träffbyggnad som också berör upphävt strandskydd = synlig källkonflikt."""
+    traff_ids = {a.byggnad_id for a in analyser if a.laege in ("inom", "delvis")}
+    return [
+        M(
+            "runner.upphavt_strandskydd_konflikt",
+            byggnad_id=byggnad_id,
+            referens=", ".join(per_lager[UPPHAVT_LAYER]),
+        )
+        for byggnad_id, per_lager in komplement.items()
+        if byggnad_id in traff_ids and per_lager.get(UPPHAVT_LAYER)
+    ]
 
 
 # Eneo's MCP client truncates tool output at 8 kB — cap the per-building list
@@ -133,7 +180,7 @@ def analysera_punkt(
     punkt: tuple[float, float],
     radie_m: float,
     nu: str,
-    hamta_wfs: Callable = query_wfs_features,
+    hamta_wfs: Callable = hamta_wfs_robust,
 ) -> dict:
     """Compact, MCP-friendly strandskydd analysis around a point.
 
@@ -141,9 +188,10 @@ def analysera_punkt(
     position, declared uncertainties and källa URLs. Never geometry, never
     imagery — references only.
     """
-    bbox, byggnader, analyser, juridik, osakerheter = _hamta_underlag(
+    bbox, byggnader, analyser, juridik, osakerheter, komplement = _hamta_underlag(
         ows_url, punkt, radie_m, nu, hamta_wfs
     )
+    osakerheter = osakerheter + _upphavt_konflikter(komplement, analyser)
 
     traff_analyser = [a for a in analyser if a.laege in ("inom", "delvis")]
     traffar = []
@@ -162,6 +210,11 @@ def analysera_punkt(
             traff["andel_inom"] = round(analys.andel_inom, 2)
         if lage.atgarder:
             traff["atgarder"] = lage.atgarder
+        extra = komplement.get(analys.byggnad_id, {})
+        if extra.get(UTVIDGAT_LAYER):
+            traff["utvidgat_strandskydd"] = extra[UTVIDGAT_LAYER]
+        if extra.get(UPPHAVT_LAYER):
+            traff["upphavt_strandskydd"] = extra[UPPHAVT_LAYER]
         traffar.append(traff)
 
     resultat = {
@@ -171,11 +224,7 @@ def analysera_punkt(
         "antal_traffar": len(traff_analyser),
         "antal_utanfor": len(analyser) - len(traff_analyser),
         "traffar": traffar,
-        "juridisk_not": (
-            "Ingen preskription för strandskyddstillsyn (MÖD 2021:6); "
-            "skälighetsbedömning enligt MÖD 2017:16 är handläggarens. "
-            "Systemet gör en bedömning — beslutet fattas av handläggaren."
-        ),
+        "juridisk_not": M("runner.juridisk_not"),
         "osakerheter": osakerheter,
         "kallor": [
             {"beskrivning": f"{BYGGNAD_LAYER} (WFS)", "url": _getfeature_url(ows_url, BYGGNAD_LAYER, bbox)},
@@ -196,7 +245,7 @@ def kor_fall7(
     ut_katalog: Path,
     nu: str,
     ar: list[int] | None = None,
-    hamta_wfs: Callable = query_wfs_features,
+    hamta_wfs: Callable = hamta_wfs_robust,
     hamta_wms: Callable | None = None,
 ) -> Path:
     """Run the Fall 7 slice around a point and write dossier.md + tidslinje PNGs.
@@ -214,10 +263,31 @@ def kor_fall7(
     Returns:
         Path to the written dossier.md.
     """
-    bbox, _byggnader, analyser, juridik, osakerheter = _hamta_underlag(
+    bbox, _byggnader, analyser, juridik, osakerheter, komplement = _hamta_underlag(
         ows_url, punkt, radie_m, nu, hamta_wfs
     )
+    osakerheter = osakerheter + _upphavt_konflikter(komplement, analyser)
     e, n = punkt
+
+    regellager_kallor = {
+        lager: Kalla(
+            beskrivning=f"{lager} (WFS)",
+            url=_getfeature_url(ows_url, lager, bbox),
+            hamtad=nu,
+        )
+        for lager in KOMPLETTERANDE_REGELLAGER
+    }
+    komplement_fakta: dict[str, list[Fakta]] = {}
+    for byggnad_id, per_lager in komplement.items():
+        komplement_fakta[byggnad_id] = [
+            Fakta(
+                f"Byggnad {byggnad_id} berör även område med "
+                f"{'utvidgat' if lager == UTVIDGAT_LAYER else 'upphävt'} strandskydd "
+                f"({', '.join(refs)}).",
+                regellager_kallor[lager],
+            )
+            for lager, refs in per_lager.items()
+        ]
 
     dossier = bygg_dossier(
         rubrik=(
@@ -243,6 +313,7 @@ def kor_fall7(
             hamtad=nu,
             referens="MB 7 kap. 13-18h §§",
         ),
+        extra_fakta_per_byggnad=komplement_fakta,
     )
 
     tidslinje_kwargs = {"hamta": hamta_wms} if hamta_wms is not None else {}
@@ -267,11 +338,7 @@ def kor_fall7(
 
 # Prototype honesty: no permit register is reachable yet — every Fall 1
 # result must say so explicitly, never silently omit it.
-_BYGGLOVSREGISTER_OSAKERHET = (
-    "Bygglovsregistret är inte tillgängligt i prototypfasen (Sokigo Nova kräver "
-    "TRIP-avtal) — ingen lovprövning har kunnat kontrolleras mot register; "
-    "kommunens testärenden används."
-)
+_BYGGLOVSREGISTER_OSAKERHET = M("runner.bygglovsregister_saknas")
 
 
 def _valj_byggnad(byggnader: dict, punkt: tuple[float, float], radie_m: float):
@@ -279,8 +346,12 @@ def _valj_byggnad(byggnader: dict, punkt: tuple[float, float], radie_m: float):
     features = byggnader.get("features", [])
     if not features:
         raise ValueError(
-            f"Ingen byggnad hittades inom {radie_m:.0f} m från punkten "
-            f"E {punkt[0]:.0f}, N {punkt[1]:.0f}."
+            M(
+                "runner.ingen_byggnad_hittad",
+                radie_m=radie_m,
+                easting=punkt[0],
+                northing=punkt[1],
+            )
         )
 
     p = Point(punkt)
@@ -298,6 +369,70 @@ def _valj_byggnad(byggnader: dict, punkt: tuple[float, float], radie_m: float):
             narmast = feature
 
     return innehallande if innehallande is not None else narmast
+
+
+def _rattighet_post(feature: dict, lager: str) -> dict:
+    props = feature.get("properties") or {}
+    ar_ga = "rk_ga" in lager
+    return {
+        "typ": "Gemensamhetsanläggning" if ar_ga else (props.get("Typ") or "Rättighet"),
+        "aktbeteckning": props.get("AKTBET") or "",
+        "andamal": (props.get("ANM") if ar_ga else props.get("RANDAMAL")) or "",
+        "beskrivning": props.get("RBESK") or "",
+        "fastighet": props.get("FASTIGHET") or "",
+        "lager": lager,
+    }
+
+
+def _rattigheter_for_byggnad(
+    ows_url: str,
+    footprint,
+    bbox: tuple,
+    hamta_wfs: Callable,
+) -> tuple[list[dict], list[str], list[str]]:
+    """(rättigheter som berör footprint, osäkerheter, lager som faktiskt svarade)."""
+    traffar: list[dict] = []
+    osakerheter: list[str] = []
+    svarade: list[str] = []
+    sedda: set[tuple[str, str]] = set()
+    for lager in RATTIGHET_LAGER:
+        try:
+            fc = hamta_wfs(ows_url, lager, bbox=bbox, max_features=200)
+        except Exception:
+            osakerheter.append(M("runner.rattighetslager_otillgangligt", lager=lager))
+            continue
+        svarade.append(lager)
+        osakerheter += _kallforbehall(fc, lager)
+        for feature in fc.get("features", []):
+            if not feature.get("geometry"):
+                continue
+            if not force_2d(shape(feature["geometry"])).intersects(footprint):
+                continue
+            post = _rattighet_post(feature, lager)
+            nyckel = (post["typ"], post["aktbeteckning"])
+            if nyckel in sedda:
+                continue
+            sedda.add(nyckel)
+            traffar.append(post)
+    return traffar[:_MAX_RATTIGHETER], osakerheter, svarade
+
+
+def _rattighet_fakta(byggnad_id: str, rattigheter: list[dict], ows_url: str, bbox: tuple, nu: str) -> list[Fakta]:
+    fakta = []
+    for r in rattigheter:
+        detalj = r["andamal"] or r["beskrivning"]
+        text = f"Byggnad {byggnad_id} berör {r['typ'].lower()} {r['aktbeteckning']}".rstrip()
+        if detalj:
+            text += f" ({detalj})"
+        if r["fastighet"]:
+            text += f" på {r['fastighet']}"
+        fakta.append(
+            Fakta(
+                text + ".",
+                Kalla(f"{r['lager']} (WFS)", _getfeature_url(ows_url, r["lager"], bbox), hamtad=nu),
+            )
+        )
+    return fakta
 
 
 def _fall1_underlag(
@@ -347,9 +482,13 @@ def _fall1_underlag(
     except Exception:
         inom_strandskydd = False
         osakerheter.append(
-            f"{STRANDSKYDD_LAYER} kunde inte hämtas (källan otillgänglig) — "
-            "strandskyddsläget har inte kunnat kontrolleras."
+            M("runner.strandskyddslager_otillgangligt", lager=STRANDSKYDD_LAYER)
         )
+
+    rattigheter, ratt_osakerheter, _svarade = _rattigheter_for_byggnad(
+        ows_url, footprint, bbox_sok, hamta_wfs
+    )
+    osakerheter += ratt_osakerheter
 
     area_m2 = footprint.area
     bal_nybyggnadsar = (building_feature.get("properties") or {}).get("bal_nybyggnadsar")
@@ -377,6 +516,7 @@ def _fall1_underlag(
         "area_m2": area_m2,
         "bal_nybyggnadsar": bal_nybyggnadsar,
         "inom_strandskydd": inom_strandskydd,
+        "rattigheter": rattigheter,
         "osakerheter": osakerheter,
     }
 
@@ -388,7 +528,7 @@ def kor_fall1(
     nu: str,
     radie_m: float = 100.0,
     ar: list[int] | None = None,
-    hamta_wfs: Callable = query_wfs_features,
+    hamta_wfs: Callable = hamta_wfs_robust,
     hamta_wms: Callable | None = None,
 ) -> Path:
     """Run the Fall 1 slice around a point and write fall1_dossier.md + tidslinje PNGs.
@@ -423,14 +563,17 @@ def kor_fall1(
             _getfeature_url(ows_url, BYGGNAD_LAYER, underlag["bbox_sok"]),
             hamtad=nu,
         ),
-        tidslinje_kalla=Kalla("Ortofoto-tidslinje 1960–2023 (WMS)", ows_url, hamtad=nu),
+        tidslinje_kalla=Kalla(M("kalla.ortofoto_tidslinje"), ows_url, hamtad=nu),
         regelverk_kalla=Kalla(
-            "PBL lovbefrielser + preskription (regelverk_vid)",
+            M("kalla.pbl_lovbefrielser_regelverk_vid"),
             "https://rkrattsdb.gov.se/SFSdoc/10/100900.PDF",
             hamtad=nu,
             referens="SFS 2010:900",
         ),
         extra_osakerheter=underlag["osakerheter"],
+        extra_fakta=_rattighet_fakta(
+            underlag["byggnad_id"], underlag["rattigheter"], ows_url, underlag["bbox_sok"], nu
+        ),
     )
 
     ut_katalog.mkdir(parents=True, exist_ok=True)
@@ -460,7 +603,7 @@ def analysera_fall1_punkt(
     nu: str,
     radie_m: float = 100.0,
     ar: list[int] | None = None,
-    hamta_wfs: Callable = query_wfs_features,
+    hamta_wfs: Callable = hamta_wfs_robust,
     hamta_wms: Callable | None = None,
 ) -> dict:
     """Compact, MCP-friendly Fall 1 analysis (olovligt byggande?) at a point.
@@ -500,6 +643,7 @@ def analysera_fall1_punkt(
         "sanktionsavgift_mojlig": lage.sanktionsavgift_mojlig,
         "matningskritiskt": lage.matningskritiskt,
         "inom_strandskydd": underlag["inom_strandskydd"],
+        "rattigheter": underlag["rattigheter"],
         "poang_per_ar": poang_per_ar,
         "osakerheter": osakerheter,
         "kallor": [
@@ -508,7 +652,7 @@ def analysera_fall1_punkt(
                 "url": _getfeature_url(ows_url, BYGGNAD_LAYER, underlag["bbox_sok"]),
             },
             {
-                "beskrivning": "PBL lovbefrielser + preskription (SFS 2010:900)",
+                "beskrivning": M("kalla.pbl_lovbefrielser_preskription"),
                 "url": "https://rkrattsdb.gov.se/SFSdoc/10/100900.PDF",
             },
         ],
@@ -518,14 +662,9 @@ def analysera_fall1_punkt(
 
 # Prototype honesty: the lov archive is a SYNTETISKT mock-ByggR testarkiv, not
 # the kommunens verkliga ärendesystem — every Fall 3 result must say so.
-_LOVARKIV_OSAKERHET = (
-    "Lovuppgifterna kommer ur ett SYNTETISKT testarkiv (mock-ByggR) — "
-    "prototypfasen har ingen åtkomst till kommunens ärendesystem."
-)
+_LOVARKIV_OSAKERHET = M("runner.lovarkiv_syntetiskt")
 
-_INGET_LOV_MEDDELANDE = (
-    "Inget ärende i (test)arkivet för punkten — se Fall 1-analysen för lovplikt."
-)
+_INGET_LOV_MEDDELANDE = M("runner.inget_lov_i_arkivet")
 
 
 def _fall3_underlag(
@@ -538,8 +677,10 @@ def _fall3_underlag(
     hamta_wms: Callable | None,
     lovarkiv_katalog: Path,
     ocr: Callable | None,
+    hamta_snedbilder: Callable | None = None,
 ):
     """Fetch + analyse everything both Fall 3 entry points need."""
+    hamta_snedbilder = hamta_snedbilder or SNEDBILDER_VID_PUNKT
     e, n = punkt
     bbox_sok = (e - radie_m, n - radie_m, e + radie_m, n + radie_m)
 
@@ -568,9 +709,13 @@ def _fall3_underlag(
     except Exception:
         granser = None
         osakerheter.append(
-            f"{FASTIGHETSGRANS_LAYER} kunde inte hämtas (källan otillgänglig) — "
-            "avstånd till fastighetsgräns har inte kunnat kontrolleras."
+            M("runner.granslager_otillgangligt", lager=FASTIGHETSGRANS_LAYER)
         )
+
+    rattigheter, ratt_osakerheter, _svarade = _rattigheter_for_byggnad(
+        ows_url, footprint, bbox_sok, hamta_wfs
+    )
+    osakerheter += ratt_osakerheter
 
     tidslinje_kwargs = {"hamta": hamta_wms} if hamta_wms is not None else {}
     bilder = hamta_tidslinje(ows_url, bbox_foot, crs=CRS, ar=ar, **tidslinje_kwargs)
@@ -587,9 +732,7 @@ def _fall3_underlag(
     if lov.godkant_lage.distance(footprint) > 5.0:
         avstand = lov.godkant_lage.distance(footprint)
         osakerheter.append(
-            "Kopplingen lov–byggnad är inte säkerställd: det godkända läget ligger "
-            f"{avstand:.0f} m från den valda byggnaden — kontrollera att ärendet "
-            "avser denna byggnad."
+            M("runner.lov_byggnad_koppling_osaker", avstand_m=avstand)
         )
 
     delta = jamfor_lage(lov.godkant_lage, footprint, granser)
@@ -601,9 +744,7 @@ def _fall3_underlag(
         if tolkat.tillganglig:
             korsjamforelse = korsjamfor(tolkat, lov)
     else:
-        osakerheter.append(
-            "Ingen skannad handling i ärendet — korskontroll ej möjlig."
-        )
+        osakerheter.append(M("runner.ingen_skannad_handling"))
 
     tolkat_anmarkningar = list(tolkat.anmarkningar) if tolkat is not None else []
 
@@ -617,13 +758,21 @@ def _fall3_underlag(
     )
 
     osakerheter.append(_LOVARKIV_OSAKERHET)
-    osakerheter.append(
-        "Byggnadens höjd och utseende kan inte kontrolleras mot lovet — flygbilder "
-        "ser inte fasader (snedbilder saknas i prototypfasen)."
-    )
+
+    # Snedbilder (MapSpace): höjd/utseende är handläggarens egen granskning —
+    # vi levererar bilderna och säger vad som inte kunde granskas, aldrig tyst.
+    snedbilder = hamta_snedbilder(e, n)
+    if snedbilder.get("tillganglig"):
+        osakerheter.append(M("runner.hojd_granska_snedbilder", ar=snedbilder.get("ar", [])))
+    elif snedbilder.get("orsak") == "ingen MAPSPACE_USERKEY":
+        osakerheter.append(M("runner.hojd_ej_kontrollerbar"))
+    else:
+        osakerheter.append(M("runner.snedbilder_otillgangliga"))
 
     return {
         "lov": lov,
+        "snedbilder": snedbilder,
+        "rattigheter": rattigheter,
         "byggnad_id": byggnad_id,
         "footprint": footprint,
         "bbox_sok": bbox_sok,
@@ -686,10 +835,12 @@ def kor_fall3(
     nu: str,
     radie_m: float = 100.0,
     ar: list[int] | None = None,
-    hamta_wfs: Callable = query_wfs_features,
+    hamta_wfs: Callable = hamta_wfs_robust,
     hamta_wms: Callable | None = None,
     lovarkiv_katalog: Path = LOVARKIV_KATALOG,
     ocr: Callable | None = None,
+    hamta_snedbilder: Callable | None = None,
+    hamta_snedbild_utsnitt: Callable | None = None,
 ) -> Path:
     """Run the Fall 3 slice around a point and write fall3_dossier.md + overlay.png.
 
@@ -704,6 +855,8 @@ def kor_fall3(
         hamta_wfs / hamta_wms: Fetchers, injectable for tests.
         lovarkiv_katalog: Directory of synthetic lov JSON records (mock-ByggR).
         ocr: OCR callable, injectable for tests (default: tesseract).
+        hamta_snedbilder / hamta_snedbild_utsnitt: MapSpace-hämtare (metadata
+            resp. PNG-utsnitt), injectable for tests.
 
     Returns:
         Path to the written fall3_dossier.md.
@@ -712,12 +865,12 @@ def kor_fall3(
         ValueError: no (test)ärende matches the point in the lovarkiv.
     """
     underlag = _fall3_underlag(
-        ows_url, punkt, nu, radie_m, ar, hamta_wfs, hamta_wms, lovarkiv_katalog, ocr
+        ows_url, punkt, nu, radie_m, ar, hamta_wfs, hamta_wms, lovarkiv_katalog, ocr,
+        hamta_snedbilder,
     )
     if underlag["lov"] is None:
         raise ValueError(
-            "Inget (test)ärende i lovarkivet matchar punkten "
-            f"E {punkt[0]:.0f}, N {punkt[1]:.0f} — se Fall 1-analysen för lovplikt."
+            M("runner.inget_arende_matchar", easting=punkt[0], northing=punkt[1])
         )
 
     e, n = punkt
@@ -726,7 +879,7 @@ def kor_fall3(
     handling_kalla = None
     if underlag["korsjamforelse"] is not None:
         handling_kalla = Kalla(
-            beskrivning=f"Skannad handling, ärende {lov.dnr}",
+            beskrivning=M("kalla.skannad_handling", dnr=lov.dnr),
             url=_kalla_url(lov.handling),
             hamtad=nu,
         )
@@ -751,7 +904,7 @@ def kor_fall3(
         datering=underlag["datering"],
         lage=underlag["lage"],
         lov_kalla=Kalla(
-            beskrivning=f"Lovarkiv (syntetiskt), ärende {lov.dnr}",
+            beskrivning=M("kalla.lovarkiv_syntetiskt", dnr=lov.dnr),
             url=_kalla_url(lov.kalla_fil),
             hamtad=nu,
         ),
@@ -762,14 +915,17 @@ def kor_fall3(
             hamtad=nu,
         ),
         grans_kalla=grans_kalla,
-        tidslinje_kalla=Kalla("Ortofoto-tidslinje 1960–2023 (WMS)", ows_url, hamtad=nu),
+        tidslinje_kalla=Kalla(M("kalla.ortofoto_tidslinje"), ows_url, hamtad=nu),
         regelverk_kalla=Kalla(
-            "PBL/ÄPBL övergångsbestämmelser + preskription (regelverk_vid)",
+            M("kalla.pbl_apbl_overgang_regelverk_vid"),
             "https://rkrattsdb.gov.se/SFSdoc/10/100900.PDF",
             hamtad=nu,
             referens="SFS 2010:900 p. 2",
         ),
         extra_osakerheter=underlag["osakerheter"],
+        extra_fakta=_rattighet_fakta(
+            underlag["byggnad_id"], underlag["rattigheter"], ows_url, underlag["bbox_sok"], nu
+        ),
     )
 
     ut_katalog.mkdir(parents=True, exist_ok=True)
@@ -792,6 +948,29 @@ def kor_fall3(
     md += "\n## Bilaga: överlagring\n\n"
     md += "- [overlay.png](overlay.png) — BLÅ = godkänt läge, RÖD = verkligt läge\n"
 
+    snedbilder = underlag["snedbilder"]
+    if snedbilder.get("tillganglig"):
+        hamta_utsnitt = hamta_snedbild_utsnitt or SNEDBILD_UTSNITT
+        md += "\n## Bilaga: snedbilder (MapSpace)\n\n"
+        md += (
+            "Underlag för handläggarens egen granskning av höjd och utseende — "
+            "punkten är markerad med röd ring.\n\n"
+        )
+        sned_katalog = ut_katalog / "snedbilder"
+        sned_katalog.mkdir(exist_ok=True)
+        for bild in snedbilder.get("bilder", []):
+            png = hamta_utsnitt(e, n, bild["riktning"])
+            if not png:
+                continue
+            fil = sned_katalog / f"snedbild_{bild['riktning']}_{bild['datum']}.png"
+            fil.write_bytes(png)
+            md += (
+                f"- [{bild['riktning']} {bild['datum']}](snedbilder/{fil.name}) — "
+                f"© {bild.get('copyright', '')}\n"
+            )
+        if snedbilder.get("viewer_url"):
+            md += f"- [Öppna i MapSpace-visaren]({snedbilder['viewer_url']})\n"
+
     dossier_fil = ut_katalog / "fall3_dossier.md"
     dossier_fil.write_text(md, encoding="utf-8")
     return dossier_fil
@@ -803,10 +982,11 @@ def analysera_fall3_punkt(
     nu: str,
     radie_m: float = 100.0,
     ar: list[int] | None = None,
-    hamta_wfs: Callable = query_wfs_features,
+    hamta_wfs: Callable = hamta_wfs_robust,
     hamta_wms: Callable | None = None,
     lovarkiv_katalog: Path = LOVARKIV_KATALOG,
     ocr: Callable | None = None,
+    hamta_snedbilder: Callable | None = None,
 ) -> dict:
     """Compact, MCP-friendly Fall 3 analysis (lovavvikelse?) at a point.
 
@@ -815,7 +995,8 @@ def analysera_fall3_punkt(
     geometry, never imagery — references only.
     """
     underlag = _fall3_underlag(
-        ows_url, punkt, nu, radie_m, ar, hamta_wfs, hamta_wms, lovarkiv_katalog, ocr
+        ows_url, punkt, nu, radie_m, ar, hamta_wfs, hamta_wms, lovarkiv_katalog, ocr,
+        hamta_snedbilder,
     )
 
     if underlag["lov"] is None:
@@ -866,6 +1047,8 @@ def analysera_fall3_punkt(
         "rattelse_preskriberad": lage.rattelse_preskriberad,
         "sanktionsavgift_mojlig": lage.sanktionsavgift_mojlig,
         "matningskritiska": lage.matningskritiska,
+        "rattigheter": underlag["rattigheter"],
+        "snedbilder": _snedbilder_kompakt(underlag["snedbilder"]),
         "osakerheter": osakerheter,
         "kallor": [
             {
@@ -873,15 +1056,32 @@ def analysera_fall3_punkt(
                 "url": _getfeature_url(ows_url, BYGGNAD_LAYER, underlag["bbox_sok"]),
             },
             {
-                "beskrivning": f"Lovarkiv (syntetiskt), ärende {lov.dnr}",
+                "beskrivning": M("kalla.lovarkiv_syntetiskt", dnr=lov.dnr),
                 "url": _kalla_url(lov.kalla_fil),
             },
             {
-                "beskrivning": "PBL/ÄPBL övergångsbestämmelser (SFS 2010:900 p. 2)",
+                "beskrivning": M("kalla.pbl_apbl_overgang"),
                 "url": "https://rkrattsdb.gov.se/SFSdoc/10/100900.PDF",
             },
+            *(
+                [{"beskrivning": M("kalla.snedbilder_mapspace"), "url": underlag["snedbilder"]["viewer_url"]}]
+                if underlag["snedbilder"].get("tillganglig")
+                else []
+            ),
         ],
         "hamtad": nu,
+    }
+
+
+def _snedbilder_kompakt(snedbilder: dict) -> dict:
+    """Eneo-vänlig sammanfattning: riktningar/årgångar + visarlänk, aldrig bilddata."""
+    if not snedbilder.get("tillganglig"):
+        return {"tillganglig": False, "orsak": snedbilder.get("orsak")}
+    return {
+        "tillganglig": True,
+        "riktningar": [b["riktning"] for b in snedbilder.get("bilder", [])],
+        "ar": snedbilder.get("ar", []),
+        "viewer_url": snedbilder.get("viewer_url"),
     }
 
 
@@ -890,7 +1090,7 @@ def fall3_geometri(
     punkt: tuple[float, float],
     nu: str,
     radie_m: float = 100.0,
-    hamta_wfs: Callable = query_wfs_features,
+    hamta_wfs: Callable = hamta_wfs_robust,
     lovarkiv_katalog: Path = LOVARKIV_KATALOG,
 ) -> dict:
     """Hämta godkänt och verkligt läge som GeoJSON för karta-overlay (Fall 3).

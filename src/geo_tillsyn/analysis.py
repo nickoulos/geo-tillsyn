@@ -91,3 +91,54 @@ def analysera_strandskydd(
         )
 
     return analyser
+
+
+def _regel_referens(feature: dict[str, Any]) -> str:
+    """Mänskligt läsbar referens för ett regellager-objekt (akt, diarienummer, namn, id)."""
+    props = feature.get("properties") or {}
+    if props.get("lm_aktbeteckning"):
+        return str(props["lm_aktbeteckning"])
+    if props.get("Diarienumm"):
+        datum = props.get("Beslutsdat")
+        return f"{props['Diarienumm']} ({datum})" if datum else str(props["Diarienumm"])
+    if props.get("NAMN"):
+        return str(props["NAMN"])
+    return _feature_id(feature)
+
+
+def komplettera_med_regellager(
+    byggnader_fc: dict[str, Any],
+    regellager: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, list[str]]]:
+    """Vilka byggnader berör objekt i de kompletterande regellagren (utvidgat/upphävt)?
+
+    Args:
+        byggnader_fc: GeoJSON FeatureCollection med byggnader.
+        regellager: {lagernamn: FeatureCollection} — t.ex. Länsstyrelsens
+            UtvidgatStrandskydd_yta och UpphavdaStrandskydd_yta.
+
+    Returns:
+        {byggnad_id: {lagernamn: [referens, ...]}} — bara byggnader som träffar
+        något, bara lager med träff. Ingen juridisk tolkning här: ett
+        upphävande i ett lager som kommunens zonlager redan borde ha räknat in
+        är en synlig källkonflikt för handläggaren, inte ett avgörande.
+    """
+    forberett = {
+        lager: [
+            (shape(f["geometry"]), _regel_referens(f))
+            for f in fc.get("features", [])
+            if f.get("geometry")
+        ]
+        for lager, fc in regellager.items()
+    }
+    resultat: dict[str, dict[str, list[str]]] = {}
+    for feature in byggnader_fc.get("features", []):
+        byggnad = shape(feature["geometry"])
+        per_lager: dict[str, list[str]] = {}
+        for lager, objekt in forberett.items():
+            refs = [ref for geom, ref in objekt if byggnad.intersects(geom)]
+            if refs:
+                per_lager[lager] = refs
+        if per_lager:
+            resultat[_feature_id(feature)] = per_lager
+    return resultat

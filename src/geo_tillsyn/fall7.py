@@ -55,6 +55,7 @@ def bygg_dossier(
     extra_osakerheter: list[str] | None = None,
     juridik: dict[str, JuridisktLage] | None = None,
     regelverk_kalla: Kalla | None = None,
+    extra_fakta_per_byggnad: dict[str, list[Fakta]] | None = None,
 ) -> Dossier:
     """Assemble the three-level Fall 7 dossier from intersection analyses.
 
@@ -62,9 +63,12 @@ def bygg_dossier(
     zone positions cite the strandskydd layer, and — when `juridik` is given —
     the time-aware regime facts cite `regelverk_kalla` (official SFS). A
     pre-1975 building inside today's zone is reported as lawfully erected;
-    its åtgärder land in the osäkerhet channel.
+    its åtgärder land in the osäkerhet channel. `extra_fakta_per_byggnad`
+    (e.g. utvidgat/upphävt strandskydd touched) is appended to that building's
+    facts and counted into its bedömning's grund.
     """
     juridik = juridik or {}
+    extra_fakta_per_byggnad = extra_fakta_per_byggnad or {}
     fakta: list[Fakta] = [
         Fakta(
             f"{len(analyser)} byggnader identifierade inom det undersökta området.",
@@ -99,6 +103,9 @@ def bygg_dossier(
                 )
             )
             fakta.append(Fakta(gallde_text, regelverk_kalla or strandskydd_kalla))
+        for extra in extra_fakta_per_byggnad.get(analys.byggnad_id, []):
+            grund_per_byggnad[analys.byggnad_id].append(len(fakta))
+            fakta.append(extra)
     if utanfor:
         fakta.append(Fakta(_utanfor_fakta(utanfor), strandskydd_kalla))
 

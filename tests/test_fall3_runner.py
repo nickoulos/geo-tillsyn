@@ -312,3 +312,67 @@ def test_grans_bortfall_ger_osakerhet(tmp_path):
 
     assert svar["avstand_grans_verklig_m"] is None
     assert any("fastighetsgräns" in o.lower() for o in svar["osakerheter"])
+
+
+# --- snedbilder (MapSpace) ------------------------------------------------------
+
+_SNEDBILDER = {
+    "tillganglig": True,
+    "bilder": [
+        {"riktning": "N", "id": "N+017.404731_62.371189_180727", "datum": "2018-07-27", "copyright": "Blom"},
+        {"riktning": "S", "id": "S+017.407632_62.371078_220720", "datum": "2022-07-20", "copyright": "Blom"},
+    ],
+    "ar": [2018, 2022],
+    "viewer_url": "https://your.mapspace.com/?workspace=Default&userkey=X",
+}
+
+
+def test_snedbilder_ger_granskningsforbehall_och_kalla_i_stallet_for_saknas(tmp_path):
+    arkiv = tmp_path / "lovarkiv"
+    _skriv_lov(arkiv)
+
+    svar = analysera_fall3_punkt(
+        "https://example.com/ows", PUNKT, NU, ar=[2007, 2010, 2013, 2015, 2021, 2023],
+        hamta_wfs=_fake_wfs, hamta_wms=_fake_wms, lovarkiv_katalog=arkiv,
+        hamta_snedbilder=lambda e, n: _SNEDBILDER,
+    )
+    koder = [getattr(o, "kod", None) for o in svar["osakerheter"]]
+    assert "runner.hojd_granska_snedbilder" in koder
+    assert "runner.hojd_ej_kontrollerbar" not in koder
+    assert svar["snedbilder"] == {
+        "tillganglig": True, "riktningar": ["N", "S"], "ar": [2018, 2022],
+        "viewer_url": _SNEDBILDER["viewer_url"],
+    }
+    assert any(getattr(k["beskrivning"], "kod", None) == "kalla.snedbilder_mapspace" for k in svar["kallor"])
+    assert len(json.dumps(svar, ensure_ascii=False).encode()) < 8_000
+
+
+def test_kor_fall3_skriver_snedbilder_som_bilaga(tmp_path):
+    arkiv = tmp_path / "lovarkiv"
+    _skriv_lov(arkiv)
+    ut = tmp_path / "ut"
+
+    dossier = kor_fall3(
+        "https://example.com/ows", PUNKT, ut, NU, ar=[2007, 2010, 2013, 2015, 2021, 2023],
+        hamta_wfs=_fake_wfs, hamta_wms=_fake_wms, lovarkiv_katalog=arkiv,
+        hamta_snedbilder=lambda e, n: _SNEDBILDER,
+        hamta_snedbild_utsnitt=lambda e, n, riktning, **kw: _png(ord(riktning)),
+    )
+    md = dossier.read_text(encoding="utf-8")
+    assert "## Bilaga: snedbilder (MapSpace)" in md
+    assert (ut / "snedbilder" / "snedbild_N_2018-07-27.png").exists()
+    assert (ut / "snedbilder" / "snedbild_S_2022-07-20.png").exists()
+    assert "Öppna i MapSpace-visaren" in md
+
+
+def test_mapspace_nere_ar_deklarerat_inte_tyst(tmp_path):
+    arkiv = tmp_path / "lovarkiv"
+    _skriv_lov(arkiv)
+    svar = analysera_fall3_punkt(
+        "https://example.com/ows", PUNKT, NU, ar=[2007, 2010, 2013, 2015, 2021, 2023],
+        hamta_wfs=_fake_wfs, hamta_wms=_fake_wms, lovarkiv_katalog=arkiv,
+        hamta_snedbilder=lambda e, n: {"tillganglig": False, "orsak": "MapSpace svarade inte: timeout"},
+    )
+    koder = [getattr(o, "kod", None) for o in svar["osakerheter"]]
+    assert "runner.snedbilder_otillgangliga" in koder
+    assert svar["snedbilder"]["tillganglig"] is False

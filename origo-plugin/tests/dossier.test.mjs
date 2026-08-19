@@ -80,3 +80,100 @@ test('renderCheckBody: fall 7-träffar renderas nästlat med byggnads-rubrik', (
   assert.match(html, /BAL-1/);
   assert.match(html, /Dispens krävs idag/);
 });
+
+/* --- backendens meddelanden: {kod, params} översätts vid rendering --- */
+
+const OSAKERHET = { kod: 'runner.lovarkiv_syntetiskt', params: {} };
+
+test('renderCheckBody: osäkerheter som meddelandekod översätts till valt språk', () => {
+  const data = { area_m2: 12, osakerheter: [OSAKERHET], kallor: [] };
+  assert.match(renderCheckBody(data, TEXTS.sv, 'sv'), /SYNTETISKT testarkiv/);
+  const en = renderCheckBody(data, TEXTS.en, 'en');
+  assert.match(en, /SYNTHETIC test archive/);
+  assert.doesNotMatch(en, /testarkiv/);
+});
+
+test('composeHeadline: meddelande som kod översätts, ren sträng passerar', () => {
+  const data = { lov_hittat: false, meddelande: { kod: 'runner.inget_lov_i_arkivet', params: {} } };
+  assert.match(composeHeadline('lovavvikelse', data, TEXTS.en, 'en'), /No case in the \(test\) archive/);
+  assert.match(composeHeadline('lovavvikelse', data, TEXTS.sv, 'sv'), /Inget ärende i \(test\)arkivet/);
+});
+
+test('renderKallor: kod-beskrivning översätts, författningsnamn står kvar ordagrant', () => {
+  const data = {
+    area_m2: 12,
+    osakerheter: [],
+    kallor: [
+      { beskrivning: { kod: 'kalla.ortofoto_tidslinje', params: {} }, url: 'https://example.se/a' },
+      { beskrivning: 'Miljöbalken 7 kap. (SFS 1998:808)', url: 'https://example.se/b' }
+    ]
+  };
+  const en = renderCheckBody(data, TEXTS.en, 'en');
+  assert.match(en, /Orthophoto timeline 1960–2023 \(WMS\)/);
+  assert.match(en, /Miljöbalken 7 kap\. \(SFS 1998:808\)/);
+});
+
+test('korsjamforelse: fältnamn får etikett och utfallet översätts — inga råa nycklar', () => {
+  const data = {
+    area_m2: 12, osakerheter: [], kallor: [],
+    korsjamforelse: { dnr: 'överens', beslutsdatum: 'avviker', byggnadsarea_m2: 'saknas' }
+  };
+  const en = renderCheckBody(data, TEXTS.en, 'en');
+  assert.match(en, /Case number/);
+  assert.match(en, /Decision date/);
+  assert.match(en, /Building area/);
+  assert.match(en, /Matches/);
+  assert.match(en, /Differs/);
+  assert.match(en, /Missing from the document/);
+  assert.doesNotMatch(en, /överens|avviker/);
+
+  const sv = renderCheckBody(data, TEXTS.sv, 'sv');
+  assert.match(sv, /Diarienummer/);
+  assert.match(sv, /Beslutsdatum/);
+});
+
+test('träffarnas laege är en uppräkning, inte fritext', () => {
+  const data = {
+    antal_traffar: 1, antal_byggnader: 2, osakerheter: [], kallor: [],
+    traffar: [{ byggnad_id: 'BAL-1', laege: 'inom', atgarder: [OSAKERHET] }]
+  };
+  const en = renderCheckBody(data, TEXTS.en, 'en');
+  assert.match(en, /Inside zone/);
+  assert.match(en, /SYNTHETIC test archive/);
+  assert.doesNotMatch(en, />inom</);
+});
+
+test('traffar_trunkerade_till har en etikett — aldrig en rå nyckel i panelen', () => {
+  const data = { traffar_trunkerade_till: 15, osakerheter: [], kallor: [] };
+  assert.match(renderCheckBody(data, TEXTS.en, 'en'), /Hit list truncated to/);
+  assert.match(renderCheckBody(data, TEXTS.sv, 'sv'), /Träfflistan trunkerad till/);
+});
+
+test('formatVarde: meddelandelista renderas som text, inte som JSON', () => {
+  const html = formatVarde([OSAKERHET], TEXTS.en, 'en');
+  assert.doesNotMatch(html, /\{|kod|params/);
+  assert.match(html, /SYNTHETIC test archive/);
+});
+
+test('renderRattigheter: en rad per rättighet, identifierare ordagrant, inga = "inga"', async () => {
+  const { renderRattigheter } = await import('../src/dossier.mjs');
+  const html = renderRattigheter([
+    { typ: 'Ledningsrätt', aktbeteckning: '2281-80/58', andamal: 'VATTEN OCH AVLOPP', fastighet: 'ALNÖ-VI 3:112' },
+    { typ: 'Gemensamhetsanläggning', aktbeteckning: '2281K-F-50', andamal: 'SPILLVATTENLEDNING', fastighet: '' }
+  ], t, 'sv');
+  assert.match(html, /Ledningsrätt <b>2281-80\/58<\/b> — VATTEN OCH AVLOPP <span class="gt-rattighet__fast">\(ALNÖ-VI 3:112\)<\/span>/);
+  assert.match(html, /Gemensamhetsanläggning <b>2281K-F-50<\/b> — SPILLVATTENLEDNING<\/li>/);
+  assert.match(html, /Rättigheter och gemensamhetsanläggningar/);
+  const en = renderRattigheter([{ typ: 'Ledningsrätt', aktbeteckning: 'X' }], TEXTS.en, 'en');
+  assert.match(en, /Utility easement \(ledningsrätt\) <b>X<\/b>/);
+  assert.match(renderRattigheter([], t, 'sv'), /inga/);
+});
+
+test('renderCheckBody: rattigheter och snedbilder renderas inte generiskt (JSON-dump)', () => {
+  const data = { ...FALL3, rattigheter: [{ typ: 'Officialservitut', aktbeteckning: 'S-1' }],
+    snedbilder: { tillganglig: true, riktningar: ['N'], ar: [2018], viewer_url: 'https://x' } };
+  const html = renderCheckBody(data, t, 'sv');
+  assert.ok(html.includes('Officialservitut <b>S-1</b>'));
+  assert.ok(!html.includes('viewer_url'));
+  assert.ok(!html.includes('"tillganglig"'));
+});

@@ -1,5 +1,5 @@
 import Origo from 'Origo';
-import { TEXTS } from './i18n.mjs';
+import { TEXTS, meddelandeText } from './i18n.mjs';
 import { composeHeadline, renderCheckBody, escapeHtml } from './dossier.mjs';
 import { renderKontextSammanfattning, renderKontextDetalj } from './regelverk.mjs';
 import { injectStyles } from './styles.mjs';
@@ -16,6 +16,14 @@ import { skapaTidslinje } from './timeline.js';
  * v0.3 — Språk: SV/EN toggle. Only the UI chrome (our own labels) is
  * translated; statutory names from regler.json (SFS titles, "friggebod",
  * lagrum) are official Swedish terms and stay verbatim in both languages.
+ *
+ * v0.6 — Språk, hela vägen: backendens osäkerheter, åtgärder, källbeskrivningar
+ * och felmeddelanden kom tidigare som färdiga svenska meningar och överlevde
+ * därför EN-läget oöversatta. `/api/*` skickar dem nu som `{kod, params}`
+ * (src/geo_tillsyn/meddelanden.py) och i18n.mjs renderar dem — språkbytet
+ * kräver ingen ny hämtning, och även info-/felkort renderas om. Uppräknade
+ * värden (`laege`, korsjämförelsens utfall) översätts via VARDE_LABEL.
+ * MCP-verktygens (Eneo) kontrakt är oförändrat: de får kvar ren svenska.
  *
  * v0.4 — B-live: kopplar pluginet till geo-tillsyn REST-backend
  * (src/geo_tillsyn/server.py). Beslutet är alltid handläggarens — pluginet
@@ -94,6 +102,10 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
   let kollapsad = false;
   let senastePunkt3014 = null;
   const senasteData = {};
+  // Kortens info-/felläge sparas som backend skickade det ({kod, params} eller
+  // ren text) så att språkväxlingen kan rendera om även dem — ett 404-svar är
+  // lika mycket innehåll som ett resultat.
+  const senasteStatus = {};
   let overlayLayer = null;
 
   function t() {
@@ -302,6 +314,15 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
   }
 
   function renderaKort(key) {
+    const status = senasteStatus[key];
+    if (status) {
+      const text = status.text !== undefined
+        ? meddelandeText(status.text, aktivtSprak)
+        : `${t().felHamtning}${status.suffix || ''}`;
+      if (status.typ === 'info') panel.setCardInfo(key, text);
+      else panel.setCardError(key, text);
+      return;
+    }
     const data = senasteData[key];
     if (!data) return;
     panel.setCardResult(key, {
@@ -310,7 +331,16 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     });
   }
 
+  // Ett kort kan bara vara i ett läge — sätt status och rendera via renderaKort,
+  // så att språkväxlingen tar samma väg som förstagångsrenderingen.
+  function visaStatus(key, status) {
+    delete senasteData[key];
+    senasteStatus[key] = status;
+    renderaKort(key);
+  }
+
   async function korOchRendera(check, [e3014, n3014]) {
+    delete senasteStatus[check.key];
     panel.setCardLoading(check.key);
     let data;
     let status = 0;
@@ -322,13 +352,12 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       data = await resp.json();
     } catch (err) {
       console.error(`geotillsyn: ${check.path} misslyckades`, err);
-      panel.setCardError(check.key, t().felHamtning);
+      visaStatus(check.key, { typ: 'fel' });
       return;
     }
     if (status === 404 && data && data.fel) {
       // Ärligt "hittades inte"-svar (ingen byggnad/inget lov) — info, inte fel.
-      delete senasteData[check.key];
-      panel.setCardInfo(check.key, data.fel);
+      visaStatus(check.key, { typ: 'info', text: data.fel });
       if (check.key === 'lovavvikelse') {
         clearOverlay();
         visaLegend(false);
@@ -336,7 +365,10 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       return;
     }
     if (status >= 400) {
-      panel.setCardError(check.key, (data && data.fel) || `HTTP ${status}`);
+      visaStatus(check.key, {
+        typ: 'fel',
+        text: (data && data.fel) || `HTTP ${status}`
+      });
       return;
     }
     senasteData[check.key] = data;
@@ -351,6 +383,42 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     }
   }
 
+  /* --- snedbilder (MapSpace) via backend-proxy: /api/snedbild + /api/snedbild/bild --- */
+
+  let senasteSnedbilder = null;
+
+  function snedbildBildUrl([e3014, n3014]) {
+    return (riktning, datum) => `${apiUrl}/api/snedbild/bild?easting=${encodeURIComponent(e3014)}`
+      + `&northing=${encodeURIComponent(n3014)}&riktning=${encodeURIComponent(riktning)}`
+      + (datum ? `&datum=${encodeURIComponent(datum.replace(/-/g, ''))}` : '');
+  }
+
+  function renderaSnedbilder() {
+    if (!senastePunkt3014) return;
+    if (senasteSnedbilder === 'fel') { panel.setSnedbilderInfo(t().snedbildFel); return; }
+    if (senasteSnedbilder) panel.setSnedbilder(senasteSnedbilder, snedbildBildUrl(senastePunkt3014));
+  }
+
+  async function hamtaSnedbilder([e3014, n3014]) {
+    panel.setSnedbilderLoading();
+    senasteSnedbilder = null;
+    try {
+      const url = `${apiUrl}/api/snedbild?easting=${encodeURIComponent(e3014)}`
+        + `&northing=${encodeURIComponent(n3014)}`;
+      const resp = await fetch(url);
+      const json = await resp.json();
+      if (!resp.ok) {
+        senasteSnedbilder = 'fel';
+      } else {
+        senasteSnedbilder = json;
+      }
+    } catch (err) {
+      console.error('geotillsyn: /api/snedbild misslyckades', err);
+      senasteSnedbilder = 'fel';
+    }
+    renderaSnedbilder();
+  }
+
   async function pahandlaKlick(evt) {
     // Ett kartklick är alltid en analysbegäran: är panelen ihopfälld öppnas
     // den — ett klick får aldrig se ut att göra ingenting.
@@ -359,11 +427,12 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     identify(evt);
     const punkt = transformTill3014(evt.coordinate);
     if (!punkt) {
-      CHECKS.forEach((c) => panel.setCardError(c.key, `${t().felHamtning} (EPSG:3014)`));
+      CHECKS.forEach((c) => visaStatus(c.key, { typ: 'fel', suffix: ' (EPSG:3014)' }));
       return;
     }
     senastePunkt3014 = punkt;
     CHECKS.forEach((c) => korOchRendera(c, punkt));
+    hamtaSnedbilder(punkt);
   }
 
   // Ett enda namngivet vektorlager för Fall 3-overlayen (godkänt/verkligt läge);
@@ -430,7 +499,11 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     aktivtSprak = aktivtSprak === 'sv' ? 'en' : 'sv';
     panel.uppdateraTexter(t());
     tidslinje.uppdateraTexter(t());
-    Object.keys(senasteData).forEach(renderaKort);
+    // Både resultat- och info-/felkort renderas om: allt backend skickade bär
+    // meddelandekoder, så språkbytet kräver ingen ny hämtning.
+    new Set([...Object.keys(senasteData), ...Object.keys(senasteStatus)])
+      .forEach(renderaKort);
+    renderaSnedbilder();
     visaAr(aktuelltAr);
     if (legendEl && !legendEl.hidden) visaLegend(true);
   }

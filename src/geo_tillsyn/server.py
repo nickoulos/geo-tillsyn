@@ -18,6 +18,10 @@ from mcp.server.transport_security import TransportSecuritySettings
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from geo_tillsyn.meddelanden import Meddelande
+from geo_tillsyn.meddelanden import Meddelande as M
+from geo_tillsyn.meddelanden import till_json
+from geo_tillsyn import snedbild
 from geo_tillsyn.runner import (
     analysera_fall1_punkt,
     analysera_fall3_punkt,
@@ -196,9 +200,73 @@ def analysera_lovavvikelse_vid_punkt(
     )
 
 
+@mcp.tool()
+def hamta_snedbilder_vid_punkt(
+    easting: float,
+    northing: float,
+    ut_katalog: str = "dossier_ut/snedbilder",
+    datum: str | None = None,
+) -> dict:
+    """Hämta snedbilder (oblique, MapSpace) över en kartpunkt och spara dem på disk.
+
+    Snedbilder visar fasader — det flygfoton inte gör — och är handläggarens
+    underlag för att själv granska höjd och utseende mot lovet (Fall 3) eller
+    en byggnads karaktär (Fall 1/5). Bästa bilden per riktning (N/E/S/W) sys
+    ihop till en PNG med punkten markerad. Ingen automatisk mätning görs.
+    Kommunens MapSpace-userkey (upphandlingsfråga F5/7a) läses ur miljön och
+    lämnar aldrig servern.
+
+    Args:
+        easting: E-koordinat i EPSG:3014.
+        northing: N-koordinat i EPSG:3014.
+        ut_katalog: Katalog PNG:erna skrivs till.
+        datum: Valfritt YYYY eller YYYYMMDD — senaste bild före det datumet
+            (tidsdimension: t.ex. 2019 ger 2018-års bilder).
+
+    Returns:
+        {"tillganglig": bool, "bilder": [{"riktning", "datum", "fil"}], "ar",
+         "viewer_url"} — sökvägar och referenser, aldrig bildinnehåll.
+    """
+    oversikt = snedbild.snedbilder_vid_punkt(easting, northing, datum=datum)
+    if not oversikt.get("tillganglig"):
+        return oversikt
+    ut = Path(ut_katalog)
+    ut.mkdir(parents=True, exist_ok=True)
+    nyckel = snedbild.userkey()
+    bilder = []
+    for b in oversikt["bilder"]:
+        try:
+            png = snedbild.hamta_utsnitt(snedbild.bild_fran_dict(b), nyckel)
+        except Exception:  # noqa: BLE001 — en riktning som fallerar tar inte de andra
+            continue
+        fil = ut / f"snedbild_{b['riktning']}_{b['datum']}.png"
+        fil.write_bytes(png)
+        bilder.append({"riktning": b["riktning"], "datum": b["datum"], "fil": str(fil)})
+    return {
+        "tillganglig": bool(bilder),
+        "bilder": bilder,
+        "ar": oversikt.get("ar", []),
+        "viewer_url": oversikt.get("viewer_url"),
+        "kalla": oversikt.get("kalla"),
+    }
+
+
 def _json(data: dict, status: int = 200) -> JSONResponse:
-    """Bygg ett JSONResponse med permissiv CORS (Origo-pluginet är cross-origin)."""
-    return JSONResponse(data, status_code=status, headers={"Access-Control-Allow-Origin": "*"})
+    """Bygg ett JSONResponse med permissiv CORS (Origo-pluginet är cross-origin).
+
+    `till_json` byter varje Meddelande mot {"kod", "params"} så att pluginet kan
+    rendera det på svenska eller engelska; MCP-verktygen får samma dict med
+    meddelandena kvar som svensk text (str-subklassen serialiseras som sträng).
+    """
+    return JSONResponse(
+        till_json(data), status_code=status, headers={"Access-Control-Allow-Origin": "*"}
+    )
+
+
+def _fel(exc: Exception) -> Meddelande | str:
+    """Plocka fram ett ValueErrors Meddelande om det bär ett, annars dess text."""
+    argument = exc.args[0] if exc.args else None
+    return argument if isinstance(argument, Meddelande) else str(exc)
 
 
 def _cors_preflight() -> Response:
@@ -219,7 +287,7 @@ def _parsa_punkt(request: Request) -> tuple[float, float, float | None]:
         easting = float(request.query_params["easting"])
         northing = float(request.query_params["northing"])
     except (KeyError, ValueError) as exc:
-        raise ValueError(f"easting/northing saknas eller kunde inte tolkas: {exc}") from exc
+        raise ValueError(M("server.parametrar_ogiltiga", detalj=str(exc))) from exc
 
     radie_raw = request.query_params.get("radie_m")
     radie_m = float(radie_raw) if radie_raw is not None else None
@@ -239,7 +307,7 @@ async def _hantera_analys(request: Request, analysfunktion, default_radie: float
     try:
         easting, northing, radie_m = _parsa_punkt(request)
     except ValueError as exc:
-        return _json({"fel": str(exc)}, status=400)
+        return _json({"fel": _fel(exc)}, status=400)
 
     try:
         resultat = analysfunktion(
@@ -249,9 +317,9 @@ async def _hantera_analys(request: Request, analysfunktion, default_radie: float
             nu=_nu(),
         )
     except ValueError as exc:
-        return _json({"fel": str(exc)}, status=404)
+        return _json({"fel": _fel(exc)}, status=404)
     except Exception:
-        return _json({"fel": "internt fel"}, status=500)
+        return _json({"fel": M("server.internt_fel")}, status=500)
 
     return _json(resultat)
 
@@ -283,7 +351,7 @@ async def api_lovavvikelse_geometri(request: Request) -> Response:
     try:
         easting, northing, radie_m = _parsa_punkt(request)
     except ValueError as exc:
-        return _json({"fel": str(exc)}, status=400)
+        return _json({"fel": _fel(exc)}, status=400)
 
     try:
         resultat = fall3_geometri(
@@ -293,19 +361,70 @@ async def api_lovavvikelse_geometri(request: Request) -> Response:
             nu=_nu(),
         )
     except ValueError as exc:
-        return _json({"fel": str(exc)}, status=404)
+        return _json({"fel": _fel(exc)}, status=404)
     except Exception:
-        return _json({"fel": "internt fel"}, status=500)
+        return _json({"fel": M("server.internt_fel")}, status=500)
 
     return _json(resultat)
 
 
-@mcp.custom_route("/api/health", methods=["GET", "OPTIONS"])
-async def api_health(request: Request) -> Response:
-    """Enkel hälsokontroll: bekräftar att alla fyra MCP-verktyg är registrerade."""
+@mcp.custom_route("/api/snedbild", methods=["GET", "OPTIONS"])
+async def api_snedbild(request: Request) -> Response:
+    """Vilka snedbilder (riktning/datum) finns över punkten + visarlänk — för Origo-panelen."""
     if request.method == "OPTIONS":
         return _cors_preflight()
-    return _json({"status": "ok", "tools": 4})
+    try:
+        easting, northing, _radie = _parsa_punkt(request)
+    except ValueError as exc:
+        return _json({"fel": _fel(exc)}, status=400)
+    datum = request.query_params.get("datum") or None
+    try:
+        oversikt = snedbild.snedbilder_vid_punkt(easting, northing, datum=datum)
+    except Exception:
+        return _json({"fel": M("server.internt_fel")}, status=500)
+    # Pluginet behöver bara riktning/datum — position/storlek är serverns sak.
+    if oversikt.get("tillganglig"):
+        oversikt = {
+            **oversikt,
+            "bilder": [
+                {k: b[k] for k in ("riktning", "datum", "copyright")} for b in oversikt["bilder"]
+            ],
+        }
+    return _json(oversikt)
+
+
+@mcp.custom_route("/api/snedbild/bild", methods=["GET", "OPTIONS"])
+async def api_snedbild_bild(request: Request) -> Response:
+    """PNG-utsnitt (punkten markerad) för en riktning — nyckeln stannar på servern."""
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    try:
+        easting, northing, _radie = _parsa_punkt(request)
+    except ValueError as exc:
+        return _json({"fel": _fel(exc)}, status=400)
+    riktning = (request.query_params.get("riktning") or "N").upper()
+    datum = request.query_params.get("datum") or None
+    zoom_raw = request.query_params.get("zoom")
+    zoom = int(zoom_raw) if zoom_raw else None
+    try:
+        png = snedbild.utsnitt_vid_punkt(easting, northing, riktning, datum=datum, zoom=zoom)
+    except Exception:
+        return _json({"fel": M("server.internt_fel")}, status=500)
+    if png is None:
+        return _json({"fel": M("runner.snedbilder_otillgangliga")}, status=404)
+    return Response(
+        png,
+        media_type="image/png",
+        headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=3600"},
+    )
+
+
+@mcp.custom_route("/api/health", methods=["GET", "OPTIONS"])
+async def api_health(request: Request) -> Response:
+    """Enkel hälsokontroll: bekräftar att alla fem MCP-verktyg är registrerade."""
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    return _json({"status": "ok", "tools": 5})
 
 
 def main(argv: list[str] | None = None) -> int:

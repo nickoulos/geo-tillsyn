@@ -38,6 +38,9 @@ Useful attributes discovered: buildings carry **`bal_nybyggnadsar` (build year)*
 and `bal_tillbyggnadsar` (extension year); `UpphavdaStrandskydd_yta` carries
 `Beslutsdat` (decision date of the lifted zone); detaljplan carries `AKTBET` +
 `PLANKARTA`/`PLANHANDL` (links toward scanned plan PDFs).
+⚠ **The plankarta/planhandling paths in the tender's `pilot3.xlsx` are SWAPPED**
+(kommun-confirmed, Aug 2026) — do not trust the xlsx labels; verify which PDF is
+the karta vs the handling per plan before wiring OCR/parsing to either.
 
 ## 2. Method
 

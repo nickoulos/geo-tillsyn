@@ -26,6 +26,7 @@ dev = [
 [project.scripts]
 geo-tillsyn = "geo_tillsyn.cli:main"
 geo-tillsyn-mcp = "geo_tillsyn.server:main"
+geo-tillsyn-geodata = "geo_tillsyn.geodata_cli:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -7,12 +7,13 @@
  * faktiskt skickat; saknas komponerbara fält visas "Se underlag".
  */
 
-import { faltLabel, teckenTal } from './i18n.mjs';
+import { faltLabel, meddelandeText, teckenTal, vardeLabel } from './i18n.mjs';
 
 // Nycklar som visas separat (rubrik, osäkerheter, källor) eller är metadata
 // och alltså inte ska upprepas generiskt i Fakta/Bedömning-listorna.
 const HOPPA_OVER = new Set(['kallor', 'osakerheter', 'meddelande', 'fel', 'hamtad',
-  'punkt', 'traffar', 'juridisk_not', 'korsjamforelse', 'lov_hittat']);
+  'punkt', 'traffar', 'juridisk_not', 'korsjamforelse', 'lov_hittat', 'rattigheter',
+  'snedbilder']);
 
 // Fält som hör hemma under "Bedömning" (juridisk tolkning) snarare än
 // "Fakta" (rådata/mätvärden). Allt annat okänt fält hamnar i Fakta.
@@ -27,31 +28,70 @@ export function escapeHtml(value) {
   }[ch]));
 }
 
-export function formatVarde(value, t) {
+// Ett backend-meddelande på tråden: {kod, params} — allt annat är rådata.
+function arMeddelande(v) {
+  return typeof v === 'object' && v !== null && typeof v.kod === 'string';
+}
+
+/**
+ * @param {*} value Värdet från backend.
+ * @param {object} t Aktiv textkatalog.
+ * @param {string} sprak 'sv' | 'en'.
+ * @param {string} [falt] Fältnamnet, när värdet är en uppräkning (t.ex. `laege`)
+ *   vars koder ska översättas via VARDE_LABEL.
+ */
+export function formatVarde(value, t, sprak, falt) {
   if (value === null || value === undefined) return t.ejFaststallt;
   if (typeof value === 'boolean') {
     return `<span class="gt-badge">${value ? t.ja : t.nej}</span>`;
   }
+  if (arMeddelande(value)) return escapeHtml(meddelandeText(value, sprak));
   if (Array.isArray(value)) {
     if (value.length === 0) return t.inga;
+    if (value.every(arMeddelande)) {
+      return value.map((v) => escapeHtml(meddelandeText(v, sprak))).join(' ');
+    }
     if (value.every((v) => typeof v === 'object' && v !== null)) {
       return value.map((v) => escapeHtml(JSON.stringify(v))).join('; ');
     }
     return value.map((v) => escapeHtml(String(v))).join(', ');
   }
   if (typeof value === 'object') return escapeHtml(JSON.stringify(value));
+  if (falt) return escapeHtml(vardeLabel(falt, String(value), sprak));
   return escapeHtml(String(value));
 }
 
-function rad(key, value, t, sprak) {
-  return `<div class="gt-rad"><span class="gt-rad__etikett">${escapeHtml(faltLabel(key, sprak))}</span>`
-    + `<span class="gt-rad__varde">${formatVarde(value, t)}</span></div>`;
+// Rättigheter/gemensamhetsanläggningar: en rad per objekt — typ, akt, ändamål,
+// fastighet. Identifierare (aktbeteckning, fastighet) står kvar ordagrant.
+export function renderRattigheter(rattigheter, t, sprak) {
+  if (!Array.isArray(rattigheter)) return '';
+  const etikett = escapeHtml(faltLabel('rattigheter', sprak));
+  if (rattigheter.length === 0) {
+    return `<div class="gt-rad"><span class="gt-rad__etikett">${etikett}</span>`
+      + `<span class="gt-rad__varde">${escapeHtml(t.inga)}</span></div>`;
+  }
+  const typer = t.rattighetTyp || {};
+  const items = rattigheter.map((r) => {
+    const typ = escapeHtml(typer[r.typ] || r.typ || '');
+    const akt = r.aktbeteckning ? ` <b>${escapeHtml(r.aktbeteckning)}</b>` : '';
+    const detalj = r.andamal || r.beskrivning;
+    const detaljDel = detalj ? ` — ${escapeHtml(detalj)}` : '';
+    const fast = r.fastighet ? ` <span class="gt-rattighet__fast">(${escapeHtml(r.fastighet)})</span>` : '';
+    return `<li>${typ}${akt}${detaljDel}${fast}</li>`;
+  }).join('');
+  return `<div class="gt-rad gt-rad--block"><span class="gt-rad__etikett">${etikett}</span>`
+    + `<ul class="gt-rattigheter">${items}</ul></div>`;
 }
 
-function renderKallor(kallor, t) {
+function rad(key, value, t, sprak, vardeFalt) {
+  return `<div class="gt-rad"><span class="gt-rad__etikett">${escapeHtml(faltLabel(key, sprak))}</span>`
+    + `<span class="gt-rad__varde">${formatVarde(value, t, sprak, vardeFalt)}</span></div>`;
+}
+
+function renderKallor(kallor, t, sprak) {
   if (!Array.isArray(kallor) || kallor.length === 0) return '';
   const items = kallor.map((k) => {
-    const beskrivning = escapeHtml(k && k.beskrivning ? k.beskrivning : '');
+    const beskrivning = escapeHtml(k ? meddelandeText(k.beskrivning, sprak) : '');
     const url = k && k.url ? String(k.url) : null;
     if (url && /^https?:\/\//i.test(url)) {
       return `<li><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${beskrivning}</a></li>`;
@@ -62,15 +102,16 @@ function renderKallor(kallor, t) {
     + `<ul>${items}</ul></div>`;
 }
 
-function renderOsakerheter(osakerheter, t) {
+function renderOsakerheter(osakerheter, t, sprak) {
   if (!Array.isArray(osakerheter) || osakerheter.length === 0) return '';
-  const items = osakerheter.map((o) => `<li>${escapeHtml(String(o))}</li>`).join('');
+  const items = osakerheter
+    .map((o) => `<li>${escapeHtml(meddelandeText(o, sprak))}</li>`).join('');
   return `<div class="gt-osakerhet" role="note" aria-label="${escapeHtml(t.osakerheter)}">`
     + `<ul>${items}</ul></div>`;
 }
 
 export function composeHeadline(checkKey, data, t, sprak) {
-  if (data && typeof data.meddelande === 'string' && data.meddelande) return data.meddelande;
+  if (data && data.meddelande) return meddelandeText(data.meddelande, sprak);
   if (!data) return t.seUnderlag;
   if (checkKey === 'olovligt'
       && data.sista_ar_utan != null && data.forsta_ar_med != null) {
@@ -93,8 +134,8 @@ export function composeHeadline(checkKey, data, t, sprak) {
 
 export function renderCheckBody(data, t, sprak) {
   if (data.meddelande) {
-    return `<div class="gt-info">${escapeHtml(data.meddelande)}</div>`
-      + renderOsakerheter(data.osakerheter, t);
+    return `<div class="gt-info">${escapeHtml(meddelandeText(data.meddelande, sprak))}</div>`
+      + renderOsakerheter(data.osakerheter, t, sprak);
   }
 
   const fakta = [];
@@ -109,17 +150,22 @@ export function renderCheckBody(data, t, sprak) {
     data.traffar.forEach((traff, idx) => {
       const rader = Object.keys(traff)
         .filter((key) => key !== 'byggnad_id')
-        .map((key) => rad(key, traff[key], t, sprak))
+        .map((key) => rad(key, traff[key], t, sprak, key === 'laege' ? 'laege' : undefined))
         .join('');
       fakta.push(`<div class="gt-traff">#${idx + 1} ${escapeHtml(faltLabel('byggnad_id', sprak))}: `
         + `${escapeHtml(String(traff.byggnad_id))}</div>${rader}`);
     });
   }
 
+  if (Array.isArray(data.rattigheter)) {
+    fakta.push(renderRattigheter(data.rattigheter, t, sprak));
+  }
+
+  // Korskontrollen OCR vs register: fältnamnen är våra egna (dnr, beslutsdatum,
+  // byggnadsarea_m2) och utfallen en uppräkning — båda ska översättas.
   if (data.korsjamforelse) {
     Object.keys(data.korsjamforelse).forEach((key) => {
-      bedomning.push(`<div class="gt-rad"><span class="gt-rad__etikett">${escapeHtml(key)}</span>`
-        + `<span class="gt-rad__varde">${formatVarde(data.korsjamforelse[key], t)}</span></div>`);
+      bedomning.push(rad(key, data.korsjamforelse[key], t, sprak, 'korsjamforelse'));
     });
   }
 
@@ -127,7 +173,7 @@ export function renderCheckBody(data, t, sprak) {
     `<details class="gt-sektion"${oppen ? ' open' : ''}><summary>${escapeHtml(rubrik)}</summary>`
     + `<div class="gt-sektion__inner">${inre || '<div class="gt-info">—</div>'}</div></details>`;
 
-  return renderOsakerheter(data.osakerheter, t)
-    + sektion(t.fakta, fakta.join('') + renderKallor(data.kallor, t), false)
+  return renderOsakerheter(data.osakerheter, t, sprak)
+    + sektion(t.fakta, fakta.join('') + renderKallor(data.kallor, t, sprak), false)
     + sektion(t.bedomning, bedomning.join(''), true);
 }

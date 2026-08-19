@@ -153,3 +153,88 @@ def test_mcp_servern_har_fall1_verktyget():
 
     verktyg = {t.name for t in asyncio.run(mcp.list_tools())}
     assert "analysera_olovligt_byggande_vid_punkt" in verktyg
+
+
+# --- rättigheter / gemensamhetsanläggningar (Lantmäteriet via GeoServer) --------
+
+RATTIGHETER = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "id": "rk_rattighet_y.1",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[12, 0], [16, 0], [16, 40], [12, 40], [12, 0]]],
+            },
+            "properties": {
+                "Typ": "Ledningsrätt", "AKTBET": "2281-80/58", "RANDAMAL": "VATTEN OCH AVLOPP",
+                "FASTIGHET": "ALNÖ-VI 3:112", "RBESK": None,
+            },
+        },
+        {
+            "type": "Feature",
+            "id": "rk_rattighet_y.2",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[200, 200], [210, 200], [210, 210], [200, 210], [200, 200]]],
+            },
+            "properties": {"Typ": "Officialservitut", "AKTBET": "LÅNGT-BORT", "RANDAMAL": "VÄG"},
+        },
+    ],
+}
+GA = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "id": "rk_ga_y.1",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[0, 18], [30, 18], [30, 22], [0, 22], [0, 18]]],
+            },
+            "properties": {"FASTIGHET": "ALNÖ-USLAND GA:6", "AKTBET": "2281K-F-50", "ANM": "SPILLVATTENLEDNING"},
+        }
+    ],
+}
+
+
+def _fejk_wfs_med_rattigheter(wfs_url, type_name, bbox=None, max_features=100):
+    if type_name == "Lantmateriet:rk_rattighet_y":
+        return RATTIGHETER
+    if type_name == "Lantmateriet:rk_ga_y":
+        return GA
+    if type_name in ("Lantmateriet:rk_rattighet_l", "Lantmateriet:rk_ga_l"):
+        return {"type": "FeatureCollection", "features": []}
+    return _fejk_wfs(wfs_url, type_name, bbox, max_features)
+
+
+def test_rattigheter_som_beror_byggnaden_blir_fakta_med_kalla(tmp_path):
+    resultat = kor_fall1(
+        ows_url=OWS, punkt=(15.0, 15.0), ut_katalog=tmp_path,
+        nu="2026-07-21T10:00:00Z", ar=ALLA_AR,
+        hamta_wfs=_fejk_wfs_med_rattigheter, hamta_wms=_fejk_wms,
+    )
+    md = resultat.read_text(encoding="utf-8")
+    assert "berör ledningsrätt 2281-80/58 (VATTEN OCH AVLOPP) på ALNÖ-VI 3:112." in md
+    assert "berör gemensamhetsanläggning 2281K-F-50 (SPILLVATTENLEDNING) på ALNÖ-USLAND GA:6." in md
+    assert "LÅNGT-BORT" not in md  # berör inte byggnaden
+    assert "Lantmateriet:rk_rattighet_y (WFS)" in md
+
+
+def test_analysera_fall1_bar_rattigheter_och_deklarerar_otillgangliga_lager():
+    resultat = analysera_fall1_punkt(
+        ows_url=OWS, punkt=(15.0, 15.0), nu="2026-07-21T10:00:00Z", ar=ALLA_AR,
+        hamta_wfs=_fejk_wfs_med_rattigheter, hamta_wms=_fejk_wms,
+    )
+    assert [r["typ"] for r in resultat["rattigheter"]] == ["Ledningsrätt", "Gemensamhetsanläggning"]
+    assert resultat["rattigheter"][0]["aktbeteckning"] == "2281-80/58"
+
+    # Alla rättighetslager trasiga (som _fejk_wfs gör) → en osäkerhet per lager, inget krascher.
+    trasigt = analysera_fall1_punkt(
+        ows_url=OWS, punkt=(15.0, 15.0), nu="2026-07-21T10:00:00Z", ar=ALLA_AR,
+        hamta_wfs=_fejk_wfs, hamta_wms=_fejk_wms,
+    )
+    assert trasigt["rattigheter"] == []
+    koder = [getattr(o, "kod", None) for o in trasigt["osakerheter"]]
+    assert koder.count("runner.rattighetslager_otillgangligt") == 4
