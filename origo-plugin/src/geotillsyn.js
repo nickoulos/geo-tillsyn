@@ -663,7 +663,7 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
   function bytSprak() {
     aktivtSprak = aktivtSprak === 'sv' ? 'en' : 'sv';
     panel.uppdateraTexter(t());
-    if (biografi) biografi.uppdateraTexter(t());
+    if (biografi) biografi.uppdateraTexter(t(), aktivtSprak);
     // Både resultat- och info-/felkort renderas om: allt backend skickade bär
     // meddelandekoder, så språkbytet kräver ingen ny hämtning.
     new Set([...Object.keys(senasteData), ...Object.keys(senasteStatus)])
@@ -734,7 +734,8 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       // att försöka hålla en levande referens uppdaterad i efterhand.
       function initBiografi() {
         biografi = skapaBiografi({
-          years, startAr: aktuelltAr, regler, t: t(), onArByte: visaAr, onRegelverk: renderRegelverkPopover
+          years, startAr: aktuelltAr, regler, t: t(), sprak: aktivtSprak,
+          onArByte: visaAr, onRegelverk: renderRegelverkPopover
         });
         rot.appendChild(biografi.el);
         biografi.setAr(aktuelltAr);

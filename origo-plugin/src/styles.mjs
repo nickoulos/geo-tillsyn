@@ -218,8 +218,12 @@ export function cssText() {
 .gt-radar__tillbaka { display: inline-block; margin-bottom: .7rem; }
 
 /* ---------- fastighetsbiografin (biografi-stripen) ---------- */
+/* --gt-biografi-hojd sätts av biografi.js på den gemensamma Origo-roten
+   (föräldern till både .gt-biografi och .gt-legend) när stripen fälls
+   ihop/ut, så legenden kan följa med. 284px = kropp(230) + axel(14) +
+   kontrollrad(40); default här matchar det expanderade läget. */
 .gt-biografi {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 170px;
+  position: absolute; left: 0; right: 0; bottom: 0; height: var(--gt-biografi-hojd, 284px);
   background: var(--gt-yta); border-top: 1px solid var(--gt-kant);
   box-shadow: 0 -4px 16px rgba(22,32,46,.08); z-index: 39;
   display: flex; flex-direction: column;
@@ -227,18 +231,23 @@ export function cssText() {
 }
 .gt-oppen .gt-biografi { padding-right: var(--gt-panel-bredd); }
 .gt-biografi--kollapsad { height: 40px; }
-@media (max-width: 900px) { .gt-biografi { height: 40px; } .gt-biografi .gt-biografi__kropp { display: none; } }
+@media (max-width: 900px) {
+  .gt-biografi { height: 40px; }
+  .gt-biografi .gt-biografi__kropp { display: none; }
+}
 .gt-biografi--kollapsad .gt-biografi__kropp { display: none; }
-.gt-biografi__kropp { flex: 1; display: flex; overflow: hidden; padding: .3rem 0 0; }
+.gt-biografi__kropp { flex: 1; display: flex; overflow: hidden; }
 .gt-biografi__etiketter {
   flex: none; width: 92px; display: flex; flex-direction: column;
-  padding: 0 .5rem; box-sizing: border-box;
+  box-sizing: border-box; border-right: 1px solid var(--gt-kant);
 }
 .gt-biografi__etikett {
-  flex: 1; display: flex; align-items: center;
-  font-size: 10.5px; font-weight: 700; letter-spacing: .03em;
-  color: var(--gt-ink-svag); line-height: 1.15;
+  display: flex; align-items: center; padding: 0 .5rem;
+  font-size: 12px; font-weight: 700; letter-spacing: .02em;
+  color: var(--gt-ink-svag); line-height: 1.2;
+  border-bottom: 1px solid var(--gt-kant); box-sizing: border-box;
 }
+.gt-biografi__etikett:nth-child(even) { background: var(--gt-yta-svag); }
 .gt-biografi__svgwrap { position: relative; flex: 1; min-width: 0; }
 .gt-biografi__svg { display: block; width: 100%; height: 100%; }
 .gt-biografi__regelpop {
@@ -261,13 +270,23 @@ export function cssText() {
 .gt-biografi__kollaps[aria-expanded="false"] .gt-chevron { transform: rotate(180deg); }
 
 /* svg-innehåll: teckensnitt/färger styrs härifrån, inte inline i biografi.js */
-.gt-biografi__svg text.gt-bio-etikett {
-  font-family: inherit; font-size: 9.5px; fill: var(--gt-ink-svag);
+.gt-biografi__svg text {
+  font-family: inherit; -webkit-user-select: none; user-select: none;
 }
-.gt-biografi__svg text.gt-bio-etikett--avviker { fill: var(--gt-varning-ink); font-weight: 700; }
-.gt-biografi__svg text.gt-bio-etikett--band { fill: var(--gt-ink); font-size: 10px; font-weight: 600; }
+.gt-biografi__svg text.gt-bio-etikett {
+  font-size: 11px; fill: var(--gt-ink-svag);
+}
+.gt-biografi__svg text.gt-bio-etikett--inuti { fill: var(--gt-ink); font-weight: 600; }
+.gt-biografi__svg text.gt-bio-etikett--band { fill: var(--gt-ink); font-size: 11px; font-weight: 600; }
+.gt-biografi__svg text.gt-bio-etikett--lov { fill: #ffffff; font-size: 10.5px; font-weight: 700; }
 
-.gt-bio-punkt { stroke-width: 1.5; }
+/* omväxlande spårbakgrund (V1) — samma par som etikettkolumnens :nth-child */
+.gt-bio-lanebakgrund { fill: var(--gt-yta); }
+.gt-bio-lanebakgrund--alt { fill: var(--gt-yta-svag); }
+.gt-bio-laneseparator { stroke: var(--gt-kant); stroke-width: 1; }
+
+/* ---------- spår 1: Verklighet ---------- */
+.gt-bio-punkt { stroke-width: 2; }
 .gt-bio-punkt--narvaro { fill: var(--gt-accent); stroke: var(--gt-accent); }
 .gt-bio-punkt--franvaro { fill: none; stroke: #b9c3d2; }
 .gt-bio-punkt--otydlig { fill: var(--gt-varning-ink); stroke: var(--gt-varning-ink); }
@@ -275,24 +294,33 @@ export function cssText() {
 .gt-bio-punkt--okand { fill: none; stroke: #dde3ec; stroke-width: 1; }
 .gt-bio-klammer line { stroke: var(--gt-ink-svag); stroke-width: 1; }
 
+/* ---------- spår 2: Register & lov ---------- */
 .gt-bio-gap { stroke: var(--gt-varning-ink); stroke-width: 2; stroke-dasharray: 4 3; }
 .gt-bio-romb { fill: var(--gt-accent-mork); }
 .gt-bio-dokument { fill: var(--gt-accent-ljus); stroke: var(--gt-accent); stroke-width: 1; }
 
+/* ---------- spår 3: Rättighet ---------- */
 .gt-bio-lagband { fill: var(--gt-accent-ljus); opacity: .45; }
 .gt-bio-lagband--aktiv { opacity: 1; }
-.gt-bio-lovbefrielse { fill: var(--gt-accent-mork); opacity: .7; }
-.gt-bio-strandskydd { fill: rgba(40,150,120,.12); stroke: rgba(40,150,120,.4); stroke-width: 1; }
+.gt-bio-lovbefrielse { fill: var(--gt-accent-mork); opacity: .85; }
+.gt-bio-strandskydd { fill: rgba(40,150,120,.16); stroke: rgba(40,150,120,.5); stroke-width: 1; }
 
-.gt-bio-klocka { stroke: var(--gt-ink); stroke-width: 4; stroke-linecap: butt; }
-.gt-bio-klocka--osaker { stroke: var(--gt-ink-svag); stroke-width: 4; stroke-dasharray: 3 2; }
+/* ---------- spår 4: Klockor ---------- */
+.gt-bio-klockstapel { fill: var(--gt-ink); }
+.gt-bio-klockstapel--osaker { fill: url(#gt-bio-hatch); stroke: var(--gt-ink-svag); stroke-width: .5; }
+.gt-bio-hatch-bg { fill: var(--gt-yta); }
+.gt-bio-hatch-line { stroke: var(--gt-ink-svag); stroke-width: 2; }
 .gt-bio-pil { fill: var(--gt-ink); }
 
+/* ---------- axel, cursor, idag ---------- */
+.gt-bio-axishit { cursor: pointer; }
 .gt-bio-axel-linje { stroke: var(--gt-kant); stroke-width: 1; }
 .gt-bio-tick { stroke: #b9c3d2; stroke-width: 1.5; cursor: pointer; }
 .gt-bio-tick--aktiv { stroke: var(--gt-accent); stroke-width: 2; }
-.gt-bio-idag { stroke: var(--gt-ink-svag); stroke-width: 1; stroke-dasharray: 1 2; }
+.gt-bio-idag { stroke: var(--gt-ink-svag); stroke-width: 1; stroke-dasharray: 2 3; }
 .gt-bio-cursor { stroke: var(--gt-accent); stroke-width: 2; }
+.gt-bio-cursorpill { fill: var(--gt-accent); }
+.gt-biografi__svg text.gt-bio-cursorpill-text { fill: #ffffff; font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* staplade rader (etikett över värde) — för meningslånga värden som regelverket */
 .gt-rad--stack { display: block; padding: .3rem 0; }
@@ -301,13 +329,14 @@ export function cssText() {
 .gt-rad--stack .gt-rad__varde { display: block; text-align: left; font-weight: 400; }
 
 /* ---------- kartlegend (Fall 3-overlay) ---------- */
-.gt-legend { position: absolute; bottom: calc(170px + 1.1rem); left: 1.1rem; z-index: 39;
+.gt-legend { position: absolute; bottom: calc(var(--gt-biografi-hojd, 284px) + 1.1rem); left: 1.1rem; z-index: 39;
   display: flex; gap: .8rem; align-items: center;
   background: var(--gt-yta); border: 1px solid var(--gt-kant); border-radius: 8px;
   box-shadow: var(--gt-skugga); padding: .35rem .7rem; font-size: 12px; }
 .gt-legend[hidden] { display: none; }
 .gt-legend__prov { display: inline-block; width: 14px; height: 3px; border-radius: 2px;
   margin-right: .35rem; vertical-align: middle; }
+@media (max-width: 900px) { .gt-legend { bottom: calc(40px + 1.1rem); } }
 `;
 }
 

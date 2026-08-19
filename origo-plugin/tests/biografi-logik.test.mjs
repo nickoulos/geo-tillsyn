@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  skapaDoman, xSkala, klassificeraAr, lagBand, lovbefrielseBand,
+  skapaDoman, xSkala, arVidX, klassificeraAr, lagBand, lovbefrielseBand,
   strandskyddBand, registerGap, klockor
 } from '../src/biografi-logik.mjs';
 
@@ -17,8 +17,8 @@ const REGLER = {
   ],
   strandskydd: { generellt_fran: '1975-07-01' },
   preskription: {
-    pbl_tioarsregel: { ar: 10 },
-    byggsanktionsavgift: { ar: 5 },
+    pbl_tioarsregel: { ar: 10, lagrum: 'PBL 11 kap. 20 § 2 st' },
+    byggsanktionsavgift: { ar: 5, lagrum: 'PBL 11 kap. 58 §' },
     strandskydd: { preskriberas: false }
   }
 };
@@ -45,6 +45,21 @@ test('xSkala: ISO-datum mitt i året hamnar mellan årets ändpunkter', () => {
   const skala = xSkala({ fran: 2000, till: 2002 }, 1000);
   const midjuli = skala('2000-07-02');
   assert.ok(midjuli > skala('2000-01-01') && midjuli < skala('2001-01-01'));
+});
+
+test('arVidX: inversen av xSkala — pixel 0/bredd landar på fran/till', () => {
+  const doman = { fran: 1960, till: 2020 };
+  assert.equal(arVidX(doman, 1000, 0), 1960);
+  assert.equal(arVidX(doman, 1000, 1000), 2020);
+  assert.equal(arVidX(doman, 1000, 500), 1990);
+});
+
+test('arVidX och xSkala är varandras inverser', () => {
+  const doman = { fran: 1960, till: 2027 };
+  const skala = xSkala(doman, 1600);
+  for (const x of [0, 137, 800, 1599]) {
+    assert.ok(Math.abs(skala(arVidX(doman, 1600, x)) - x) < 1e-9);
+  }
 });
 
 /* ---------- klassificeraAr ---------- */
@@ -134,12 +149,14 @@ test('klockor: rättelse + sanktion utan strandskydd', () => {
   const rattelse = k.find((x) => x.nyckel === 'rattelse');
   assert.deepEqual(rattelse, {
     nyckel: 'rattelse', startSaker: 2007, startOsaker: 2001,
-    slutSaker: 2017, slutOsaker: 2011, oandlig: false, status: true
+    slutSaker: 2017, slutOsaker: 2011, oandlig: false,
+    ar: 10, lagrum: 'PBL 11 kap. 20 § 2 st', status: true
   });
   const sanktion = k.find((x) => x.nyckel === 'sanktion');
   assert.deepEqual(sanktion, {
     nyckel: 'sanktion', startSaker: 2007, startOsaker: 2001,
-    slutSaker: 2012, slutOsaker: 2006, oandlig: false, status: false
+    slutSaker: 2012, slutOsaker: 2006, oandlig: false,
+    ar: 5, lagrum: 'PBL 11 kap. 58 §', status: false
   });
 });
 
@@ -158,7 +175,8 @@ test('klockor: strandskydd-klocka tillkommer när träffen inte är utanför', (
   const ss = k.find((x) => x.nyckel === 'strandskydd');
   assert.deepEqual(ss, {
     nyckel: 'strandskydd', startSaker: 2007, startOsaker: 2001,
-    slutSaker: null, slutOsaker: null, oandlig: true, status: false
+    slutSaker: null, slutOsaker: null, oandlig: true,
+    ar: null, lagrum: null, status: false
   });
 });
 

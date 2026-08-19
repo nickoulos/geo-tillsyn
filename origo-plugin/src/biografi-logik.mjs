@@ -38,6 +38,14 @@ export function xSkala(doman, bredd) {
   };
 }
 
+// Inversen av xSkala: pixel -> år (fractional) — driver klick/drag-snappning
+// på axeln (narmasteAr(years, arVidX(...)) i biografi.js).
+export function arVidX(doman, bredd, x) {
+  const { fran, till } = doman;
+  if (bredd === 0) return fran;
+  return fran + (x / bredd) * (till - fran);
+}
+
 const NARVARO_VARDEN = new Set(['narvaro', 'franvaro', 'otydlig']);
 
 export function klassificeraAr(olovligt, years) {
@@ -81,7 +89,7 @@ export function registerGap(olovligt) {
   return { fran: olovligt.forsta_ar_med, till: olovligt.bal_nybyggnadsar, avviker: true };
 }
 
-function klocka(nyckel, startSaker, startOsaker, ar, oandlig, status) {
+function klocka(nyckel, startSaker, startOsaker, ar, lagrum, oandlig, status) {
   return {
     nyckel,
     startSaker,
@@ -89,6 +97,8 @@ function klocka(nyckel, startSaker, startOsaker, ar, oandlig, status) {
     slutSaker: oandlig ? null : startSaker + ar,
     slutOsaker: oandlig ? null : startOsaker + ar,
     oandlig,
+    ar: oandlig ? null : ar,
+    lagrum: oandlig ? null : lagrum,
     status: status === undefined ? null : status
   };
 }
@@ -97,16 +107,16 @@ export function klockor(olovligt, strandskyddTraff, regler) {
   if (!olovligt || olovligt.forsta_ar_med == null) return [];
   const startSaker = olovligt.forsta_ar_med;
   const startOsaker = olovligt.sista_ar_utan != null ? olovligt.sista_ar_utan : startSaker;
+  const tioar = regler.preskription.pbl_tioarsregel;
+  const femar = regler.preskription.byggsanktionsavgift;
 
   const resultat = [
-    klocka('rattelse', startSaker, startOsaker,
-      regler.preskription.pbl_tioarsregel.ar, false, olovligt.rattelse_preskriberad),
-    klocka('sanktion', startSaker, startOsaker,
-      regler.preskription.byggsanktionsavgift.ar, false, olovligt.sanktionsavgift_mojlig)
+    klocka('rattelse', startSaker, startOsaker, tioar.ar, tioar.lagrum, false, olovligt.rattelse_preskriberad),
+    klocka('sanktion', startSaker, startOsaker, femar.ar, femar.lagrum, false, olovligt.sanktionsavgift_mojlig)
   ];
 
   if (strandskyddTraff && strandskyddTraff.laege !== 'utanfor') {
-    resultat.push(klocka('strandskydd', startSaker, startOsaker, null, true, strandskyddTraff.preskriberas));
+    resultat.push(klocka('strandskydd', startSaker, startOsaker, null, null, true, strandskyddTraff.preskriberas));
   }
 
   return resultat;
