@@ -155,3 +155,72 @@ def test_poang_redovisas_per_ar_for_sparbarhet():
     assert set(resultat.poang_per_ar) == {2010, 2015, 2021, 2023}
     assert resultat.poang_per_ar[2010] < 0.35
     assert resultat.poang_per_ar[2021] > 0.6
+
+
+# --- narvaro_per_ar / uteslutna_ar (fastighetsbiografi, verklighet-vy) ------------
+
+
+def test_narvaro_per_ar_klassificerar_varje_anvant_ar():
+    bilder = _serie(utan_ar=[1998, 2007, 2010], med_ar=[2013, 2015, 2021, 2023])
+
+    resultat = datera_byggnad(bilder, FOOTPRINT, BBOX)
+
+    # One classification per year that made it into poang_per_ar — no more, no less.
+    assert set(resultat.narvaro_per_ar) == set(resultat.poang_per_ar)
+    for ar in (1998, 2007, 2010):
+        assert resultat.narvaro_per_ar[ar] == "franvaro"
+    for ar in (2013, 2015, 2021):
+        assert resultat.narvaro_per_ar[ar] == "narvaro"
+    assert resultat.uteslutna_ar == []
+
+
+def test_otydligt_ar_klassificeras_som_otydlig_i_narvaro_per_ar():
+    rng = np.random.RandomState(42)
+    bilder = _serie(utan_ar=[2007], med_ar=[2010, 2015, 2023])
+    suddig = 0.35 * _byggnads_monster(rng) + 0.65 * _mark_utan_byggnad(rng)
+    bilder.append(_mark(2021, _png(suddig)))
+    bilder.sort(key=lambda b: b.ar)
+
+    resultat = datera_byggnad(bilder, FOOTPRINT, BBOX)
+
+    assert resultat.narvaro_per_ar[2021] == "otydlig"
+    assert resultat.narvaro_per_ar[2007] == "franvaro"
+    assert resultat.narvaro_per_ar[2010] == "narvaro"
+
+
+def test_uteslutna_ar_speglar_innehallslosa_ar():
+    bilder = _serie(utan_ar=[2010, 2013], med_ar=[2015, 2021, 2023])
+    platt = np.full((SIZE, SIZE), 128.0)  # uniform gray, NOT flagged tom
+    bilder.append(_mark(2016, _png(platt)))
+    bilder.sort(key=lambda b: b.ar)
+
+    resultat = datera_byggnad(bilder, FOOTPRINT, BBOX)
+
+    assert resultat.uteslutna_ar == [2016]
+    assert 2016 not in resultat.narvaro_per_ar
+
+
+def test_uteslutna_ar_satts_aven_om_for_fa_argangar_kvarstar_efter_filtrering():
+    # 2010 + 2016(platt) + 2023 pass the initial >= 3 usable-vintage gate, but
+    # dropping the content-less 2016 leaves only 2 -> the "for few years" early
+    # return fires. uteslutna_ar must still carry 2016 — the exclusion happened
+    # before that gate, and must never be silently dropped.
+    bilder = _serie(utan_ar=[2010], med_ar=[2023])
+    platt = np.full((SIZE, SIZE), 128.0)
+    bilder.append(_mark(2016, _png(platt)))
+    bilder.sort(key=lambda b: b.ar)
+
+    resultat = datera_byggnad(bilder, FOOTPRINT, BBOX)
+
+    assert resultat.sista_ar_utan is None and resultat.forsta_ar_med is None
+    assert resultat.uteslutna_ar == [2016]
+    assert resultat.narvaro_per_ar == {}
+
+
+def test_narvaro_per_ar_och_uteslutna_ar_defaultar_tomt():
+    bilder = _serie(utan_ar=[2010], med_ar=[2023])  # only 2 usable vintages
+
+    resultat = datera_byggnad(bilder, FOOTPRINT, BBOX)
+
+    assert resultat.narvaro_per_ar == {}
+    assert resultat.uteslutna_ar == []

@@ -146,6 +146,27 @@ def test_analysera_fall1_punkt_ar_kompakt_och_mcp_vanlig():
     assert len(serialiserad.encode()) < 8_000
 
 
+def test_analysera_fall1_punkt_bar_narvaro_per_ar_och_uteslutna_ar():
+    resultat = analysera_fall1_punkt(
+        ows_url=OWS,
+        punkt=(15.0, 15.0),
+        nu="2026-07-21T10:00:00Z",
+        ar=ALLA_AR,
+        hamta_wfs=_fejk_wfs,
+        hamta_wms=_fejk_wms,
+    )
+
+    # String keys (JSON contract) — same years as poang_per_ar, classified.
+    assert set(resultat["narvaro_per_ar"]) == {str(a) for a in resultat["poang_per_ar"]}
+    assert all(isinstance(k, str) for k in resultat["narvaro_per_ar"])
+    assert resultat["narvaro_per_ar"]["2013"] == "franvaro"
+    assert resultat["narvaro_per_ar"]["2015"] == "narvaro"
+    assert resultat["uteslutna_ar"] == []
+
+    serialiserad = json.dumps(resultat, ensure_ascii=False)
+    assert len(serialiserad.encode()) < 8_000
+
+
 def test_mcp_servern_har_fall1_verktyget():
     import asyncio
 

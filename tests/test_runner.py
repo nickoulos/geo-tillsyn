@@ -171,3 +171,73 @@ def test_analysera_punkt_bar_komplement_och_forbehall():
     assert "runner.upphavt_strandskydd_konflikt" in koder
     assert "geodata.snapshot_anvant" in koder
     assert "runner.regellager_otillgangligt" not in koder
+
+
+# --- vald_byggnad_id + vald träff först i traffar (fastighetsbiografi) -----------
+
+BYGGNADER_TVA = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "id": "bal_byggnad_yta.10",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[10, 10], [20, 10], [20, 20], [10, 20], [10, 10]]],
+            },
+            "properties": {"bal_nybyggnadsar": 2014},
+        },
+        {
+            "type": "Feature",
+            "id": "bal_byggnad_yta.20",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[30, 30], [40, 30], [40, 40], [30, 40], [30, 30]]],
+            },
+            "properties": {"bal_nybyggnadsar": 1990},
+        },
+    ],
+}
+
+
+def _fejk_wfs_tva_byggnader(wfs_url, type_name, bbox=None, max_features=100):
+    if type_name == "SundsvallsKommun:bal_byggnad_yta":
+        return BYGGNADER_TVA
+    return _fejk_wfs(wfs_url, type_name, bbox, max_features)
+
+
+def test_analysera_punkt_flyttar_vald_traff_forst_utan_att_andra_antal_traffar():
+    from geo_tillsyn.runner import analysera_punkt
+
+    # Punkt inuti byggnad .20 -> _valj_byggnad väljer den, trots att den ligger
+    # sist i WFS-svaret (byggnad .10 kommer först i input-ordning).
+    res = analysera_punkt(
+        ows_url=OWS, punkt=(35.0, 35.0), radie_m=100.0,
+        nu="2026-08-19T10:00:00Z", hamta_wfs=_fejk_wfs_tva_byggnader,
+    )
+
+    assert res["vald_byggnad_id"] == "bal_byggnad_yta.20"
+    assert [t["byggnad_id"] for t in res["traffar"]] == [
+        "bal_byggnad_yta.20", "bal_byggnad_yta.10",
+    ]
+    assert res["antal_traffar"] == 2  # oförändrat av omordningen
+
+
+def test_analysera_punkt_utan_byggnader_ger_vald_byggnad_id_none_och_kraschar_inte():
+    from geo_tillsyn.runner import analysera_punkt
+
+    tomt = {"type": "FeatureCollection", "features": []}
+
+    def _fejk_wfs_tom(wfs_url, type_name, bbox=None, max_features=100):
+        if type_name == "SundsvallsKommun:bal_byggnad_yta":
+            return tomt
+        return _fejk_wfs(wfs_url, type_name, bbox, max_features)
+
+    res = analysera_punkt(
+        ows_url=OWS, punkt=(15.0, 15.0), radie_m=100.0,
+        nu="2026-08-19T10:00:00Z", hamta_wfs=_fejk_wfs_tom,
+    )
+
+    assert res["vald_byggnad_id"] is None
+    assert res["traffar"] == []
+    assert res["antal_traffar"] == 0

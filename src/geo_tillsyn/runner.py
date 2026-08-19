@@ -175,6 +175,44 @@ def _upphavt_konflikter(komplement: dict, analyser) -> list[str]:
 _MAX_TRAFFAR_I_SVAR = 15
 
 
+def _rangordna_grupp(traff: dict) -> int:
+    """(a) gällde vid uppförande, (b) år okänt, (c) gällde inte — spec §5.
+
+    En byggnad med känt byggnadsår men okänd regim (ikraftträdandeårets
+    månad saknas — `gallde_vid_uppforande is None` med `byggnads_ar` satt)
+    är ett randfall spec §5 inte namnger; det hamnar sist, efter de tre
+    uttryckliga grupperna, snarare än att tyst kollapsas in i någon av dem.
+    """
+    gallde = traff.get("gallde_vid_uppforande")
+    if gallde is True:
+        return 0
+    if traff.get("byggnads_ar") is None:
+        return 1
+    if gallde is False:
+        return 2
+    return 3
+
+
+def rangordna_traffar(traffar: list[dict]) -> list[dict]:
+    """Radar-lite-rangordning: mest underlag för granskning först (spec §5).
+
+    Ren funktion: tar kopior av indata, muterar aldrig `traffar`. Grupperar
+    (a) gällde_vid_uppforande är True, (b) byggnads_ar är None,
+    (c) gällde_vid_uppforande är False; inom grupp: läge "inom" före
+    "delvis", sedan byggnad_id stigande (sträng). Ger varje kopia ett
+    1-baserat `"rang"`.
+    """
+    ordnade = sorted(
+        traffar,
+        key=lambda t: (
+            _rangordna_grupp(t),
+            0 if t.get("laege") == "inom" else 1,
+            t["byggnad_id"],
+        ),
+    )
+    return [{**t, "rang": i} for i, t in enumerate(ordnade, start=1)]
+
+
 def analysera_punkt(
     ows_url: str,
     punkt: tuple[float, float],
@@ -193,7 +231,22 @@ def analysera_punkt(
     )
     osakerheter = osakerheter + _upphavt_konflikter(komplement, analyser)
 
+    # Byggnaden närmast klicket — aldrig ett hårt fel: en punkt utan byggnader
+    # inom radien är ett giltigt (om ointressant) Fall 7-svar, inte en krasch.
+    try:
+        vald = _valj_byggnad(byggnader, punkt, radie_m)
+    except ValueError:
+        vald = None
+    vald_byggnad_id = str(vald.get("id")) if vald is not None else None
+
     traff_analyser = [a for a in analyser if a.laege in ("inom", "delvis")]
+    if vald_byggnad_id is not None:
+        # Stabil sortering: den valda byggnadens träff (om någon) hamnar
+        # först, resten behåller sin inbördes ordning — görs FÖRE trunkering
+        # så den alltid finns med i svaret.
+        traff_analyser = sorted(
+            traff_analyser, key=lambda a: a.byggnad_id != vald_byggnad_id
+        )
     traffar = []
     for analys in traff_analyser[:_MAX_TRAFFAR_I_SVAR]:
         lage = juridik[analys.byggnad_id]
@@ -223,6 +276,7 @@ def analysera_punkt(
         "antal_byggnader": len(analyser),
         "antal_traffar": len(traff_analyser),
         "antal_utanfor": len(analyser) - len(traff_analyser),
+        "vald_byggnad_id": vald_byggnad_id,
         "traffar": traffar,
         "juridisk_not": M("runner.juridisk_not"),
         "osakerheter": osakerheter,
@@ -626,6 +680,7 @@ def analysera_fall1_punkt(
         bal_forenligt = datering.sista_ar_utan < bal_nybyggnadsar <= datering.forsta_ar_med
 
     poang_per_ar = {ar_: round(p, 2) for ar_, p in datering.poang_per_ar.items()}
+    narvaro_per_ar = {str(ar_): kl for ar_, kl in datering.narvaro_per_ar.items()}
 
     osakerheter = list(datering.anmarkningar) + list(lage.atgarder) + list(underlag["osakerheter"])
 
@@ -645,6 +700,8 @@ def analysera_fall1_punkt(
         "inom_strandskydd": underlag["inom_strandskydd"],
         "rattigheter": underlag["rattigheter"],
         "poang_per_ar": poang_per_ar,
+        "narvaro_per_ar": narvaro_per_ar,
+        "uteslutna_ar": datering.uteslutna_ar,
         "osakerheter": osakerheter,
         "kallor": [
             {
@@ -1132,4 +1189,86 @@ def fall3_geometri(
         "godkant_lage": mapping(lov.godkant_lage),
         "verkligt_lage": mapping(footprint),
         "dnr": lov.dnr,
+    }
+
+
+def fall7_geometri(
+    ows_url: str,
+    punkt: tuple[float, float],
+    nu: str,
+    radie_m: float = 150.0,
+    hamta_wfs: Callable = hamta_wfs_robust,
+) -> dict:
+    """Hämta alla träffars byggnadspolygoner som GeoJSON för radar-lite (Fall 7).
+
+    Till skillnad från `analysera_punkt` (kompakt JSON, inga geometrier —
+    Eneo-kontraktet) returnerar denna funktion faktiska polygoner i EPSG:3014,
+    avsedda för Origo-pluginets kartlager — aldrig ett MCP-verktyg (samma
+    gräns som `fall3_geometri`). Använder samma `_hamta_underlag` + juridiska
+    resultat som `analysera_punkt`, så siffrorna i den kompakta träffen och
+    polygonen på kartan alltid är samma.
+
+    Args:
+        ows_url: GeoServer OWS endpoint.
+        punkt: (easting, northing) i EPSG:3014 — kartklicket.
+        nu: ISO-tidsstämpel (injiceras för deterministiska tester).
+        radie_m: Sökradie i meter runt punkten (standard 150).
+        hamta_wfs: WFS-hämtare, injicerbar för tester.
+
+    Returns:
+        GeoJSON FeatureCollection (EPSG:3014, se "crs"): en Feature per träff
+        (ALLA, ingen trunkering) med properties {byggnad_id, laege,
+        byggnads_ar, gallde_vid_uppforande, dispens_kravs_idag, preskriberas,
+        har_atgarder, rang} — `rang` från `rangordna_traffar` (1 = mest
+        underlag för granskning). Plus "antal_traffar" och "vald_byggnad_id".
+
+    Raises:
+        ValueError: ingen byggnad hittades inom radien.
+    """
+    bbox, byggnader, analyser, juridik, osakerheter, komplement = _hamta_underlag(
+        ows_url, punkt, radie_m, nu, hamta_wfs
+    )
+    vald = _valj_byggnad(byggnader, punkt, radie_m)
+    vald_byggnad_id = str(vald.get("id"))
+
+    geometri_per_id = {
+        str(f.get("id")): f.get("geometry") for f in byggnader.get("features", [])
+    }
+
+    traffar = []
+    for analys in analyser:
+        if analys.laege not in ("inom", "delvis"):
+            continue
+        lage = juridik[analys.byggnad_id]
+        traffar.append(
+            {
+                "byggnad_id": analys.byggnad_id,
+                "laege": analys.laege,
+                "byggnads_ar": lage.byggnads_ar,
+                "gallde_vid_uppforande": lage.gallde_vid_uppforande,
+                "dispens_kravs_idag": lage.dispens_kravs_idag,
+                "preskriberas": lage.preskriberas,
+                "har_atgarder": bool(lage.atgarder),
+            }
+        )
+
+    features = []
+    for traff in rangordna_traffar(traffar):
+        geom = geometri_per_id.get(traff["byggnad_id"])
+        if geom is None:
+            continue
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": mapping(force_2d(shape(geom))),
+                "properties": traff,
+            }
+        )
+
+    return {
+        "type": "FeatureCollection",
+        "crs": CRS,
+        "features": features,
+        "antal_traffar": len(traffar),
+        "vald_byggnad_id": vald_byggnad_id,
     }

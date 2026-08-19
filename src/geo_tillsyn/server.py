@@ -27,6 +27,7 @@ from geo_tillsyn.runner import (
     analysera_fall3_punkt,
     analysera_punkt,
     fall3_geometri,
+    fall7_geometri,
     kor_fall7,
 )
 
@@ -358,6 +359,36 @@ async def api_lovavvikelse_geometri(request: Request) -> Response:
             ows_url=SUNDSVALL_OWS,
             punkt=(easting, northing),
             radie_m=radie_m if radie_m is not None else 100.0,
+            nu=_nu(),
+        )
+    except ValueError as exc:
+        return _json({"fel": _fel(exc)}, status=404)
+    except Exception:
+        return _json({"fel": M("server.internt_fel")}, status=500)
+
+    return _json(resultat)
+
+
+@mcp.custom_route("/api/strandskydd/geometri", methods=["GET", "OPTIONS"])
+async def api_strandskydd_geometri(request: Request) -> Response:
+    """Träffarnas byggnadspolygoner som GeoJSON (EPSG:3014) för radar-lite (Fall 7).
+
+    REST-only, precis som /api/lovavvikelse/geometri — registreras aldrig som
+    MCP-verktyg (Eneo-kontraktet är den kompakta JSON:en, aldrig geometri).
+    """
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+
+    try:
+        easting, northing, radie_m = _parsa_punkt(request)
+    except ValueError as exc:
+        return _json({"fel": _fel(exc)}, status=400)
+
+    try:
+        resultat = fall7_geometri(
+            ows_url=SUNDSVALL_OWS,
+            punkt=(easting, northing),
+            radie_m=radie_m if radie_m is not None else 150.0,
             nu=_nu(),
         )
     except ValueError as exc:

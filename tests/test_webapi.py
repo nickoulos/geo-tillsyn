@@ -175,6 +175,79 @@ def test_lovavvikelse_geometri_returnerar_geojson(client, monkeypatch):
     assert r.headers["access-control-allow-origin"] == "*"
 
 
+def test_strandskydd_geometri_returnerar_geojson(client, monkeypatch):
+    canned = {
+        "type": "FeatureCollection",
+        "crs": "EPSG:3014",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[10, 10], [20, 10], [20, 20], [10, 20], [10, 10]]],
+                },
+                "properties": {"byggnad_id": "bal_byggnad_yta.10", "rang": 1},
+            }
+        ],
+        "antal_traffar": 1,
+        "vald_byggnad_id": "bal_byggnad_yta.10",
+    }
+    monkeypatch.setattr(server_mod, "fall7_geometri", lambda **kw: canned)
+
+    r = client.get("/api/strandskydd/geometri", params={"easting": 15.0, "northing": 15.0})
+
+    assert r.status_code == 200
+    assert r.json() == canned
+    assert r.headers["access-control-allow-origin"] == "*"
+
+
+def test_strandskydd_geometri_anropar_med_defaultradie(client, monkeypatch):
+    fanget = {}
+
+    def fake(**kw):
+        fanget.update(kw)
+        return {"type": "FeatureCollection", "features": []}
+
+    monkeypatch.setattr(server_mod, "fall7_geometri", fake)
+
+    r = client.get("/api/strandskydd/geometri", params={"easting": 1.0, "northing": 2.0})
+
+    assert r.status_code == 200
+    assert fanget["punkt"] == (1.0, 2.0)
+    assert fanget["radie_m"] == 150.0
+
+
+def test_strandskydd_geometri_valueerror_ger_404(client, monkeypatch):
+    def fake(**kw):
+        raise ValueError(
+            Meddelande("runner.ingen_byggnad_hittad", radie_m=150.0, easting=1.0, northing=2.0)
+        )
+
+    monkeypatch.setattr(server_mod, "fall7_geometri", fake)
+
+    r = client.get("/api/strandskydd/geometri", params={"easting": 1.0, "northing": 2.0})
+
+    assert r.status_code == 404
+    assert r.json()["fel"]["kod"] == "runner.ingen_byggnad_hittad"
+    assert r.headers["access-control-allow-origin"] == "*"
+
+
+def test_strandskydd_geometri_options_preflight_ger_204(client):
+    r = client.options("/api/strandskydd/geometri")
+
+    assert r.status_code == 204
+    assert r.headers["access-control-allow-origin"] == "*"
+    assert r.headers["access-control-allow-methods"] == "GET, OPTIONS"
+
+
+def test_strandskydd_geometri_ar_inte_registrerad_som_mcp_verktyg(client):
+    import asyncio
+
+    verktyg = {t.name for t in asyncio.run(server_mod.mcp.list_tools())}
+    assert "fall7_geometri" not in verktyg
+    assert not any("geometri" in namn for namn in verktyg)
+
+
 def test_snedbild_returnerar_oversikt_utan_position_eller_nyckel(client, monkeypatch):
     monkeypatch.setattr(
         server_mod.snedbild, "snedbilder_vid_punkt",

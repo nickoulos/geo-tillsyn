@@ -45,6 +45,8 @@ class DateringsResultat:
     poang_per_ar: dict[int, float] = field(default_factory=dict)
     anvanda_ar: list[int] = field(default_factory=list)
     anmarkningar: list[str] = field(default_factory=list)
+    narvaro_per_ar: dict[int, str] = field(default_factory=dict)
+    uteslutna_ar: list[int] = field(default_factory=list)
 
 
 def _grayscale(png: bytes) -> np.ndarray:
@@ -63,6 +65,19 @@ def _footprint_mask(shape: tuple[int, int], footprint, bbox) -> np.ndarray:
     ys = maxy - (np.arange(hojd) + 0.5) * (maxy - miny) / hojd
     gx, gy = np.meshgrid(xs, ys)
     return contains_xy(footprint, gx.ravel(), gy.ravel()).reshape(shape)
+
+
+def _klassificera_per_ar(poang: dict[int, float]) -> dict[int, str]:
+    """narvaro/franvaro/otydlig per år, samma trösklar som datera_byggnad."""
+    resultat: dict[int, str] = {}
+    for ar, p in poang.items():
+        if p >= _NARVARO_GRANS:
+            resultat[ar] = "narvaro"
+        elif p <= _FRANVARO_GRANS:
+            resultat[ar] = "franvaro"
+        else:
+            resultat[ar] = "otydlig"
+    return resultat
 
 
 def _korrelation(a: np.ndarray, b: np.ndarray) -> float:
@@ -133,17 +148,17 @@ def datera_byggnad(
         else:
             patchar[bild.ar] = patch
 
+    uteslutna_ar = sorted(innehallslosa)
     if innehallslosa:
-        anmarkningar.append(
-            M("datering.argangar_utan_innehall", ar=sorted(innehallslosa))
-        )
+        anmarkningar.append(M("datering.argangar_utan_innehall", ar=uteslutna_ar))
     anvandbara = [b for b in anvandbara if b.ar in patchar]
     if len(anvandbara) < _MINSTA_ANTAL_AR:
         anmarkningar.append(
             M("datering.for_fa_argangar", antal=len(anvandbara), minst=_MINSTA_ANTAL_AR)
         )
         return DateringsResultat(
-            None, None, {}, [b.ar for b in anvandbara], anmarkningar
+            None, None, {}, [b.ar for b in anvandbara], anmarkningar,
+            uteslutna_ar=uteslutna_ar,
         )
 
     referens = patchar[anvandbara[-1].ar]
@@ -178,7 +193,10 @@ def datera_byggnad(
 
     if forsta_ar_med is None:
         anmarkningar.append(M("datering.ingen_bortom_referensar"))
-        return DateringsResultat(None, None, poang, ar_stigande, anmarkningar)
+        return DateringsResultat(
+            None, None, poang, ar_stigande, anmarkningar,
+            narvaro_per_ar=_klassificera_per_ar(poang), uteslutna_ar=uteslutna_ar,
+        )
 
     fore = [ar for ar in ar_stigande if ar < forsta_ar_med and franvaro[ar]]
     sista_ar_utan = max(fore) if fore else None
@@ -191,4 +209,6 @@ def datera_byggnad(
         poang_per_ar=poang,
         anvanda_ar=ar_stigande,
         anmarkningar=anmarkningar,
+        narvaro_per_ar=_klassificera_per_ar(poang),
+        uteslutna_ar=uteslutna_ar,
     )
