@@ -220,10 +220,12 @@ export function cssText() {
 /* ---------- fastighetsbiografin (biografi-stripen) ---------- */
 /* --gt-biografi-hojd sätts av biografi.js på den gemensamma Origo-roten
    (föräldern till både .gt-biografi och .gt-legend) när stripen fälls
-   ihop/ut, så legenden kan följa med. 284px = kropp(230) + axel(14) +
-   kontrollrad(40); default här matchar det expanderade läget. */
+   ihop/ut, så legenden kan följa med. 296px = kropp(242) + axel(14) +
+   kontrollrad(40); default här matchar det expanderade läget. Kroppen växte
+   230 -> 242 (Rättighet 72 -> 84, reviewer-fynd 3: delad lovbefrielserad ->
+   två rader) — måste hållas i synk med TOTAL_H i biografi.js. */
 .gt-biografi {
-  position: absolute; left: 0; right: 0; bottom: 0; height: var(--gt-biografi-hojd, 284px);
+  position: absolute; left: 0; right: 0; bottom: 0; height: var(--gt-biografi-hojd, 296px);
   background: var(--gt-yta); border-top: 1px solid var(--gt-kant);
   box-shadow: 0 -4px 16px rgba(22,32,46,.08); z-index: 39;
   display: flex; flex-direction: column;
@@ -279,6 +281,7 @@ export function cssText() {
 .gt-biografi__svg text.gt-bio-etikett--inuti { fill: var(--gt-ink); font-weight: 600; }
 .gt-biografi__svg text.gt-bio-etikett--band { fill: var(--gt-ink); font-size: 11px; font-weight: 600; }
 .gt-biografi__svg text.gt-bio-etikett--lov { fill: #ffffff; font-size: 10.5px; font-weight: 700; }
+.gt-biografi__svg text.gt-bio-etikett--inuti-klocka { fill: #ffffff; font-weight: 700; }
 
 /* omväxlande spårbakgrund (V1) — samma par som etikettkolumnens :nth-child */
 .gt-bio-lanebakgrund { fill: var(--gt-yta); }
@@ -329,7 +332,7 @@ export function cssText() {
 .gt-rad--stack .gt-rad__varde { display: block; text-align: left; font-weight: 400; }
 
 /* ---------- kartlegend (Fall 3-overlay) ---------- */
-.gt-legend { position: absolute; bottom: calc(var(--gt-biografi-hojd, 284px) + 1.1rem); left: 1.1rem; z-index: 39;
+.gt-legend { position: absolute; bottom: calc(var(--gt-biografi-hojd, 296px) + 1.1rem); left: 1.1rem; z-index: 39;
   display: flex; gap: .8rem; align-items: center;
   background: var(--gt-yta); border: 1px solid var(--gt-kant); border-radius: 8px;
   box-shadow: var(--gt-skugga); padding: .35rem .7rem; font-size: 12px; }

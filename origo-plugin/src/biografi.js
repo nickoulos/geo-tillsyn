@@ -28,9 +28,13 @@ import { formatTal } from './i18n.mjs';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 // Spårens höjder (px) — Klockor och Rättighet är störst eftersom de kan
-// behöva rita flest samtidiga element (tre klockstaplar; tre rättighetsrader).
-const LANE_H = [56, 44, 72, 58]; // Verklighet, Register & lov, Rättighet, Klockor
-const KROPP_H = LANE_H.reduce((a, b) => a + b, 0); // 230
+// behöva rita flest samtidiga element (tre klockstaplar; fyra rättighetsrader
+// — lagregim, TVÅ lovbefrielserader (se ritaRattighet) och strandskydd).
+// Rättighet växte 72 -> 84 (reviewer-fynd 3): en delad lovbefrielserad lät
+// attefallshusstaplarna 2014-2025 helt övermåla friggebod-stapeln för samma
+// period, så attefall-2014 (demots akt 1) syntes aldrig som eget element.
+const LANE_H = [56, 44, 84, 58]; // Verklighet, Register & lov, Rättighet, Klockor
+const KROPP_H = LANE_H.reduce((a, b) => a + b, 0); // 242
 const LANE_TOP = [];
 (() => {
   let cursor = 0;
@@ -42,6 +46,10 @@ const H = KROPP_H + AXEL_H; // SVG-höjd (kroppen, inkl. axel)
 const KONTROLLRAD_H = 40; // ‹ › år Regelverk-knapp kollaps — separat rad under SVG:n
 const TOTAL_H = H + KONTROLLRAD_H;
 const KOLLAPSAD_H = 40;
+
+// Rättighetslanens lovbefrielserad B (attefallslinjen, kräver anmälan);
+// allt annat namn (friggebod, komplementbyggnad, okänt) hamnar i rad A.
+const RAD_B_NAMN = new Set(['attefallshus', 'komplementbostadshus']);
 
 const CHEVRON = '<svg class="gt-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>';
 
@@ -93,18 +101,26 @@ function etikettForBand(lager, text, xStart, xEnd, y, cls, bredd, storlek) {
 }
 
 // Klockornas etikett: till höger om stapelns slut om det får plats, annars
-// innanför stapeln (ankare vid slutet), annars före stapelns start.
+// FÖRE stapelns start (utanför, på spårbakgrunden — alltid läsbar), och bara
+// om ingetdera får plats innanför stapeln som sista utväg. Vänster-fallet
+// prioriteras framför inuti-fallet (reviewer-fynd 1): stapeln är ofta helt
+// solid (`--gt-ink`-fylld, samma färg som den vanliga mörka etikettexten) när
+// `sista_ar_utan` saknas, så en etikett ovanpå den blev osynlig i det vanliga
+// fallet där den långa lagrumsetiketten inte får plats till höger.
 function etikettForKlocka(lager, text, xBarStart, xBarEnd, y, cls, bredd, storlek) {
   const tb = textbredd(text, storlek);
   if (xBarEnd + 4 + tb <= bredd - 2) {
     skrivText(lager, text, xBarEnd + 4, y, cls, 'start');
     return;
   }
-  if (xBarEnd - xBarStart >= tb + 8) {
-    skrivText(lager, text, xBarEnd - 4, y, `${cls} gt-bio-etikett--inuti`, 'end');
+  if (xBarStart - 4 - tb >= 2) {
+    skrivText(lager, text, xBarStart - 4, y, cls, 'end');
     return;
   }
-  skrivText(lager, text, Math.max(2, xBarStart - 4), y, cls, 'end');
+  // Sista utväg: innanför stapeln. Vit kontrastetikett (mirror av
+  // gt-bio-etikett--lov) i stället för den vanliga mörka --inuti-klassen,
+  // som annars kan hamna osynlig mot den solida klockstapelns --gt-ink-fyllning.
+  skrivText(lager, text, xBarEnd - 4, y, `${cls} gt-bio-etikett--inuti-klocka`, 'end');
 }
 
 // En centrerad etikett (markörer i Verklighet/Register) — klampas mot
@@ -174,6 +190,14 @@ export function skapaBiografi({ years, startAr, regler, t, sprak, onArByte, onRe
 
   /* ---------- axel: klick/drag snappar till närmaste ortofotoårgång ---------- */
 
+  // Lyssnarna sitter på window (inte setPointerCapture på axisHit): varje
+  // velj() kör render(), som gör svg.textContent = '' och kopplar bort
+  // axisHit ur DOM:en innan den återkopplas i samma synkrona anrop. Webbläsare
+  // släpper pekarens capture när målelementet kopplas bort, så en captured
+  // pointerup kunde tidigare hamna utanför axisHit och aldrig nollställa
+  // `drar` — sen tolkades varje efterföljande hover som en fortsatt drag
+  // (reviewer-fynd 2). window-lyssnare som läggs på/tas bort explicit per
+  // drag är opåverkade av att axisHit själv kopplas bort/på under render().
   const axisHit = el('rect', { class: 'gt-bio-axishit', fill: 'transparent' });
   let drar = false;
   function arFranPekare(evt) {
@@ -182,21 +206,24 @@ export function skapaBiografi({ years, startAr, regler, t, sprak, onArByte, onRe
     const x = (evt.clientX - rect.left) * skalfaktor;
     return narmasteAr(years, arVidX(domain, bredd, x));
   }
-  axisHit.addEventListener('pointerdown', (evt) => {
-    drar = true;
-    try { axisHit.setPointerCapture(evt.pointerId); } catch (err) { /* jsdom/headless saknar ibland stöd */ }
-    velj(arFranPekare(evt));
-  });
-  axisHit.addEventListener('pointermove', (evt) => {
+  function pekarFlytt(evt) {
     if (!drar) return;
     velj(arFranPekare(evt));
-  });
-  function slappDrag(evt) {
-    drar = false;
-    try { axisHit.releasePointerCapture(evt.pointerId); } catch (err) { /* se ovan */ }
   }
-  axisHit.addEventListener('pointerup', slappDrag);
-  axisHit.addEventListener('pointercancel', slappDrag);
+  function slappDrag() {
+    if (!drar) return;
+    drar = false;
+    window.removeEventListener('pointermove', pekarFlytt);
+    window.removeEventListener('pointerup', slappDrag);
+    window.removeEventListener('pointercancel', slappDrag);
+  }
+  axisHit.addEventListener('pointerdown', (evt) => {
+    drar = true;
+    window.addEventListener('pointermove', pekarFlytt);
+    window.addEventListener('pointerup', slappDrag);
+    window.addEventListener('pointercancel', slappDrag);
+    velj(arFranPekare(evt));
+  });
 
   /* ---------- Spår 1: Verklighet ---------- */
 
@@ -282,8 +309,15 @@ export function skapaBiografi({ years, startAr, regler, t, sprak, onArByte, onRe
     const laneTop = LANE_TOP[2];
     const isoCursor = `${cursorAr}-07-01`;
     const radLag = { top: laneTop + 4, h: 18 };
-    const radLov = { top: laneTop + 26, h: 14 };
-    const radSs = { top: laneTop + 48, h: 12 };
+    // Två lovbefrielserader (reviewer-fynd 3) i stället för en delad rad, som
+    // lät t.ex. attefallshus 2014-07-02–2025-11-30 helt övermåla friggebod
+    // 15 m² för samma period — friggebod-2014 (Akt 1 i demot) blev osynlig.
+    // Rad A: den "lilla" komplementbyggnadslinjen (friggebod -> komplement-
+    // byggnad, samt okänt namn som fallback). Rad B: attefallslinjen
+    // (attefallshus -> komplementbostadshus, båda kräver anmälan).
+    const radLovA = { top: laneTop + 26, h: 14 };
+    const radLovB = { top: laneTop + 43, h: 14 };
+    const radSs = { top: laneTop + 62, h: 12 };
 
     lagBand(regler).forEach((band) => {
       const x1 = skala(band.fran);
@@ -300,10 +334,13 @@ export function skapaBiografi({ years, startAr, regler, t, sprak, onArByte, onRe
     });
 
     lovbefrielseBand(regler).forEach((b) => {
+      // "attefallshus"/"komplementbostadshus" i rad B; allt annat (friggebod,
+      // komplementbyggnad, ett okänt framtida namn) i rad A.
+      const rad = RAD_B_NAMN.has(b.namn) ? radLovB : radLovA;
       const x1 = skala(b.fran);
       const x2 = b.till ? skala(b.till) : bredd;
       const rect = el('rect', {
-        x: x1, y: radLov.top, width: Math.max(0, x2 - x1), height: radLov.h, class: 'gt-bio-lovbefrielse'
+        x: x1, y: rad.top, width: Math.max(0, x2 - x1), height: rad.h, class: 'gt-bio-lovbefrielse'
       });
       const etikett = `${b.namn} ${b.max_kvm} m²`;
       rect.appendChild(titel(etikett));
@@ -313,7 +350,7 @@ export function skapaBiografi({ years, startAr, regler, t, sprak, onArByte, onRe
       // egen bredd) lät långa etiketter ("attefallshus 30 m²") svämma över
       // i grannstapeln vid smalare fönster; måttet görs därför dynamiskt.
       if (x2 - x1 >= textbredd(etikett, 10.5) + 10) {
-        skrivText(lager, etikett, x1 + 4, radLov.top + radLov.h - 4,
+        skrivText(lager, etikett, x1 + 4, rad.top + rad.h - 4,
           'gt-bio-etikett gt-bio-etikett--lov gt-bio-etikett--inuti', 'start');
       }
     });
@@ -374,7 +411,7 @@ export function skapaBiografi({ years, startAr, regler, t, sprak, onArByte, onRe
       } else {
         // Namn + antal år + lagrum kommer alla från regler.json — stripen
         // hårdkodar aldrig "10 år"/"5 år" i UI-texten (endast ordet "år").
-        etikett = `${NAMN[k.nyckel]} ${k.ar} ${texts.radarAr} · ${k.lagrum}`;
+        etikett = `${NAMN[k.nyckel]} ${k.ar} ${texts.arLabel} · ${k.lagrum}`;
         if (k.status === true) etikett += ` · ${texts.utgangen(k.slutSaker)}`;
         else if (k.status === false) etikett += ` · ${texts.loperTill(k.slutSaker)}`;
       }
