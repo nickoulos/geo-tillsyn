@@ -111,3 +111,35 @@ def test_snedbildsverktyget_ar_registrerat_och_svarar_arligt_utan_nyckel(monkeyp
     )
     res = server.hamta_snedbilder_vid_punkt(1.0, 2.0, ut_katalog=str(tmp_path))
     assert res == {"tillganglig": False, "orsak": "ingen MAPSPACE_USERKEY"}
+
+
+def test_bygglovsarenden_verktyget_ar_byggr_kompatibelt(monkeypatch, tmp_path):
+    """Mock-ByggR via ArendeExportWS-formen: trakt + fBetNr in, Tekis-fält ut."""
+    import json as _json
+    from geo_tillsyn import server
+
+    verktyg = [t.name for t in asyncio.run(server.mcp.list_tools())]
+    assert "hamta_bygglovsarenden_for_fastighet" in verktyg
+
+    (tmp_path / "x.json").write_text(_json.dumps({
+        "syntetisk": True, "dnr": "SBN 2009-0412", "fastighet": "ALNÖ-USLAND 1:45",
+        "beslutsdatum": "2009-06-19", "atgard": "Nybyggnad av enbostadshus",
+        "godkant_lage": {"crs": "EPSG:3014", "koordinater": [[0, 0], [1, 0], [1, 1]]},
+    }), encoding="utf-8")
+    monkeypatch.setattr(server, "LOVARKIV_KATALOG", tmp_path)
+
+    res = server.hamta_bygglovsarenden_for_fastighet("Alnö-Usland 1:45")
+
+    assert res["trakt"] == "ALNÖ-USLAND" and res["fBetNr"] == "1:45"
+    assert res["antal"] == 1
+    assert res["arenden"][0]["dnr"] == "SBN 2009-0412"
+    assert res["kalla"]["syntetisk"] is True
+    assert "ArendeExportWS" in res["kalla"]["format"]
+    assert len(json.dumps(res, ensure_ascii=False).encode()) < 8_000
+
+
+def test_bygglovsarenden_verktyget_avvisar_ogiltig_beteckning():
+    from geo_tillsyn import server
+
+    res = server.hamta_bygglovsarenden_for_fastighet("ALNÖ-USLAND")
+    assert res["antal"] == 0 and "fel" in res

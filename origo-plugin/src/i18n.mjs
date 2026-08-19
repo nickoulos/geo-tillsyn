@@ -63,6 +63,23 @@ export const TEXTS = {
     regelverk: 'Regelverk',
     regelverkAria: 'Visa regelverket för valt år',
     statutNot: '',
+    biografiAria: 'Fastighetsbiografi',
+    sparVerklighet: 'Verklighet',
+    sparRegister: 'Register & lov',
+    sparRattighet: 'Rättighet',
+    sparKlockor: 'Klockor',
+    biografiKollapsAria: 'Fäll ihop biografistripen',
+    biografiOppnaAria: 'Fäll ut biografistripen',
+    forstSynlig: (sista, forsta) => `först synlig ${sista}–${forsta}`,
+    registerEtikett: (ar) => `Register ${ar}`,
+    lovEtikett: (dnr) => `Lov ${dnr}`,
+    rattelseNamn: 'Rättelse 10 år',
+    sanktionNamn: 'Sanktionsavgift 5 år',
+    utgangen: (ar) => `utgången ${ar}`,
+    loperTill: (ar) => `löper till ${ar}`,
+    ingenPreskription: 'ingen preskription · MÖD 2021:6',
+    idagLabel: 'idag',
+    avvikerBadge: 'avviker',
     lag: 'Lag',
     lovbefrielser: 'Lovbefrielser',
     ingaLovbefrielser: 'inga lovbefrielser',
@@ -88,6 +105,21 @@ export const TEXTS = {
     snedbildFel: 'Snedbilder kunde inte hämtas',
     snedbildAlt: (riktning, datum) => `Snedbild mot ${riktning}, ${datum}`,
     riktning: { N: 'Norr', E: 'Öster', S: 'Söder', W: 'Väster' },
+    radarKnapp: 'Skanna vyn',
+    radarKnappAria: 'Tillsynsradar: skanna synlig kartvy efter byggnader i strandskyddszon',
+    radarRubrik: 'Tillsynsradar',
+    radarUnder: 'Byggnader mot strandskyddszoner i hela den synliga vyn — samma motor, samma måttstock för alla',
+    radarRubrikRad: (traffar, totalt) => `${traffar} kandidater av ${totalt} byggnader i vyn`,
+    radarLaddar: 'Skannar vyn…',
+    radarIngaKandidater: 'Inga byggnader möter strandskyddszon i vyn.',
+    radarFel: 'Skanningen kunde inte genomföras',
+    radarTrunkerad: (visade, totalt) => `Visar ${visade} av ${totalt} kandidater — zooma in för resten.`,
+    radarPoangmodell: 'Så räknas poängen',
+    radarVisaGrunder: 'Grunder',
+    radarPoangEnhet: 'p',
+    radarAr: 'år',
+    radarOppnaAria: (rang) => `Öppna kandidat ${rang} i kartan och granska`,
+    radarTillbaka: 'Till radarlistan',
     rattighetTyp: {
       'Ledningsrätt': 'Ledningsrätt', 'Officialservitut': 'Officialservitut',
       'Avtalsservitut': 'Avtalsservitut', 'Gemensamhetsanläggning': 'Gemensamhetsanläggning'
@@ -140,6 +172,23 @@ export const TEXTS = {
     regelverk: 'Legislation',
     regelverkAria: 'Show the legislation in force for the selected year',
     statutNot: 'Swedish statutory names (acts, “friggebod”, “attefallshus”) are kept verbatim.',
+    biografiAria: 'Property biography',
+    sparVerklighet: 'Reality',
+    sparRegister: 'Register & permit',
+    sparRattighet: 'Entitlement',
+    sparKlockor: 'Clocks',
+    biografiKollapsAria: 'Collapse the biography strip',
+    biografiOppnaAria: 'Expand the biography strip',
+    forstSynlig: (sista, forsta) => `first visible ${sista}–${forsta}`,
+    registerEtikett: (ar) => `Register ${ar}`,
+    lovEtikett: (dnr) => `Permit ${dnr}`,
+    rattelseNamn: 'Correction 10 years',
+    sanktionNamn: 'Building sanction fee 5 years',
+    utgangen: (ar) => `expired ${ar}`,
+    loperTill: (ar) => `runs until ${ar}`,
+    ingenPreskription: 'never time-barred · MÖD 2021:6',
+    idagLabel: 'today',
+    avvikerBadge: 'differs',
     lag: 'Act',
     lovbefrielser: 'Permit exemptions',
     ingaLovbefrielser: 'no permit exemptions',
@@ -165,6 +214,21 @@ export const TEXTS = {
     snedbildFel: 'Oblique images could not be fetched',
     snedbildAlt: (riktning, datum) => `Oblique view facing ${riktning}, ${datum}`,
     riktning: { N: 'North', E: 'East', S: 'South', W: 'West' },
+    radarKnapp: 'Scan view',
+    radarKnappAria: 'Supervision radar: scan the visible map view for buildings in shoreline protection zones',
+    radarRubrik: 'Supervision radar',
+    radarUnder: 'Buildings against shoreline protection zones across the whole visible view — same engine, same yardstick for all',
+    radarRubrikRad: (traffar, totalt) => `${traffar} candidates of ${totalt} buildings in view`,
+    radarLaddar: 'Scanning view…',
+    radarIngaKandidater: 'No buildings meet a shoreline protection zone in view.',
+    radarFel: 'The scan could not be completed',
+    radarTrunkerad: (visade, totalt) => `Showing ${visade} of ${totalt} candidates — zoom in for the rest.`,
+    radarPoangmodell: 'How the score is computed',
+    radarVisaGrunder: 'Grounds',
+    radarPoangEnhet: 'pts',
+    radarAr: 'year',
+    radarOppnaAria: (rang) => `Open candidate ${rang} on the map and review`,
+    radarTillbaka: 'Back to radar list',
     rattighetTyp: {
       'Ledningsrätt': 'Utility easement (ledningsrätt)', 'Officialservitut': 'Official easement (officialservitut)',
       'Avtalsservitut': 'Contractual easement (avtalsservitut)', 'Gemensamhetsanläggning': 'Joint facility (gemensamhetsanläggning)'
@@ -449,8 +513,36 @@ export const MEDDELANDEN = {
     'kalla.pbl_apbl_overgang_regelverk_vid': () =>
       'PBL/ÄPBL övergångsbestämmelser + preskription (regelverk_vid)',
 
+    'radar.poang_inom': () => 'Byggnaden ligger helt inom strandskyddszon (+3).',
+    'radar.poang_delvis': (p) =>
+      `Byggnaden ligger delvis inom strandskyddszon (${Math.round(p.andel * 100)} %) (+2).`,
+    'radar.poang_gallde_vid_uppforande': (p) =>
+      `Strandskyddet gällde redan när byggnaden uppfördes (${p.ar}) — dispensplikt vid uppförandet (+3).`,
+    'radar.poang_fore_strandskydd': (p) =>
+      `Uppförd ${p.ar}, innan strandskyddet gällde på platsen — ingen dispensplikt vid uppförandet (+0).`,
+    'radar.poang_ar_okant': () =>
+      'Tillkomstår ej fastställt i registret — kan inte uteslutas; datera via ortofoto-tidslinjen (+1).',
+    'radar.poang_ar_ikrafttradandear': (p) =>
+      `Uppförd ikraftträdandeåret ${p.ar} — månad krävs för att avgöra regimen (+1).`,
+    'radar.poang_utvidgat': () => 'Berör även utvidgat strandskydd enligt Länsstyrelsen (+1).',
+    'radar.kallkonflikt_upphavt': (p) =>
+      `Berör upphävt strandskydd (${p.referens}) — källkonflikt mot kommunens zonlager; granska innan åtgärd (±0).`,
+    'radar.modell_lage': () => 'Läge: helt inom zon +3, delvis inom +2, utanför = ingen kandidat.',
+    'radar.modell_regim': () =>
+      'Regim vid uppförandet: strandskyddet gällde redan +3, gällde inte +0, ikraftträdandeår +1 (månad saknas).',
+    'radar.modell_ar_okant': () => 'Tillkomstår okänt i registret +1 — aldrig uteslutet, aldrig högst.',
+    'radar.modell_utvidgat': () =>
+      'Utvidgat strandskydd (Länsstyrelsen) +1; upphävt strandskydd ger ingen poäng men flaggas som källkonflikt.',
+    'radar.juridisk_not': () =>
+      'Listan är kandidater för granskning, rangordnade efter hur tydligt byggnad och strandskyddszon sammanfaller över tid — inte beslut och inte påståenden om överträdelse. Dispenser är inte kontrollerade. Systematisk skanning ger samma måttstock för alla; handläggaren beslutar, alltid.',
+    'radar.fastighetslager_otillgangligt': (p) =>
+      `Fastighetslagret ${p.lager} kunde inte hämtas — kandidater redovisas utan fastighetsbeteckning.`,
+    'radar.zon_for_stor': (p) =>
+      `Zonen är ${tal(p.area_km2, 1, 'sv')} km² — radarn skannar högst ${tal(p.max_km2, 1, 'sv')} km² åt gången; zooma in eller dela upp.`,
     'server.parametrar_ogiltiga': (p) =>
       `easting/northing saknas eller kunde inte tolkas: ${p.detalj}`,
+    'server.bbox_ogiltig': (p) =>
+      `bbox saknas eller kunde inte tolkas (minE,minN,maxE,maxN i EPSG:3014): ${p.detalj}`,
     'server.internt_fel': () => 'internt fel'
   },
 
@@ -615,8 +707,36 @@ export const MEDDELANDEN = {
     'kalla.pbl_apbl_overgang_regelverk_vid': () =>
       'PBL/ÄPBL transitional provisions + limitation (regelverk_vid)',
 
+    'radar.poang_inom': () => 'The building lies entirely within a shoreline protection zone (+3).',
+    'radar.poang_delvis': (p) =>
+      `The building lies partly within a shoreline protection zone (${Math.round(p.andel * 100)} %) (+2).`,
+    'radar.poang_gallde_vid_uppforande': (p) =>
+      `Shoreline protection already applied when the building was erected (${p.ar}) — exemption was required at construction (+3).`,
+    'radar.poang_fore_strandskydd': (p) =>
+      `Erected ${p.ar}, before shoreline protection applied at the site — no exemption required at construction (+0).`,
+    'radar.poang_ar_okant': () =>
+      'Year of construction not established in the register — cannot be ruled out; date it via the orthophoto timeline (+1).',
+    'radar.poang_ar_ikrafttradandear': (p) =>
+      `Erected in the year of entry into force ${p.ar} — the month is needed to decide the regime (+1).`,
+    'radar.poang_utvidgat': () => 'Also touches extended shoreline protection per the County Administrative Board (+1).',
+    'radar.kallkonflikt_upphavt': (p) =>
+      `Touches revoked shoreline protection (${p.referens}) — source conflict with the municipal zone layer; review before acting (±0).`,
+    'radar.modell_lage': () => 'Position: entirely within zone +3, partly within +2, outside = not a candidate.',
+    'radar.modell_regim': () =>
+      'Regime at construction: protection already applied +3, did not apply +0, year of entry into force +1 (month missing).',
+    'radar.modell_ar_okant': () => 'Year of construction unknown in the register +1 — never excluded, never top-ranked.',
+    'radar.modell_utvidgat': () =>
+      'Extended shoreline protection (County Administrative Board) +1; revoked protection scores nothing but is flagged as a source conflict.',
+    'radar.juridisk_not': () =>
+      'The list holds candidates for review, ranked by how clearly building and shoreline protection zone coincide over time — not decisions and not claims of violation. Exemptions are not checked. Systematic scanning applies the same yardstick to everyone; the case officer always decides.',
+    'radar.fastighetslager_otillgangligt': (p) =>
+      `The property layer ${p.lager} could not be fetched — candidates are listed without property designation.`,
+    'radar.zon_for_stor': (p) =>
+      `The zone is ${tal(p.area_km2, 1, 'en')} km² — the radar scans at most ${tal(p.max_km2, 1, 'en')} km² at a time; zoom in or split it.`,
     'server.parametrar_ogiltiga': (p) =>
       `easting/northing is missing or could not be parsed: ${p.detalj}`,
+    'server.bbox_ogiltig': (p) =>
+      `bbox missing or unparseable (minE,minN,maxE,maxN in EPSG:3014): ${p.detalj}`,
     'server.internt_fel': () => 'internal error'
   }
 };

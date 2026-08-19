@@ -130,6 +130,23 @@ def _hamta_underlag(
     analyser = analysera_strandskydd(byggnader, strandskydd)
     komplement = komplettera_med_regellager(byggnader, regellager)
 
+    # Rättigheter/servitut/GA som berör träffbyggnaderna — ett faktum per
+    # byggnad med egen källa, ingen slutsats (anbudssvar 151260 7d).
+    rattighet_fc, ratt_osakerheter = _hamta_rattighetslager(ows_url, bbox, hamta_wfs)
+    osakerheter += ratt_osakerheter
+    footprint_per_id = {
+        str(f.get("id")): force_2d(shape(f["geometry"]))
+        for f in byggnader.get("features", [])
+        if f.get("geometry")
+    }
+    rattigheter: dict[str, list[dict]] = {}
+    for a in analyser:
+        if a.laege not in ("inom", "delvis") or a.byggnad_id not in footprint_per_id:
+            continue
+        traffar = _rattigheter_som_beror(rattighet_fc, footprint_per_id[a.byggnad_id])
+        if traffar:
+            rattigheter[a.byggnad_id] = traffar
+
     ar_per_byggnad = {
         str(f.get("id")): (f.get("properties") or {}).get("bal_nybyggnadsar")
         for f in byggnader.get("features", [])
@@ -142,7 +159,7 @@ def _hamta_underlag(
         for analys in analyser
         if analys.laege in ("inom", "delvis")
     }
-    return bbox, byggnader, analyser, juridik, osakerheter, komplement
+    return bbox, byggnader, analyser, juridik, osakerheter, komplement, rattigheter, list(rattighet_fc)
 
 
 def _kallforbehall(fc: dict, lager: str) -> list[str]:
@@ -226,7 +243,7 @@ def analysera_punkt(
     position, declared uncertainties and källa URLs. Never geometry, never
     imagery — references only.
     """
-    bbox, byggnader, analyser, juridik, osakerheter, komplement = _hamta_underlag(
+    bbox, byggnader, analyser, juridik, osakerheter, komplement, rattigheter, ratt_lager = _hamta_underlag(
         ows_url, punkt, radie_m, nu, hamta_wfs
     )
     osakerheter = osakerheter + _upphavt_konflikter(komplement, analyser)
@@ -268,6 +285,11 @@ def analysera_punkt(
             traff["utvidgat_strandskydd"] = extra[UTVIDGAT_LAYER]
         if extra.get(UPPHAVT_LAYER):
             traff["upphavt_strandskydd"] = extra[UPPHAVT_LAYER]
+        if rattigheter.get(analys.byggnad_id):
+            traff["rattigheter"] = [
+                {k: r[k] for k in ("typ", "aktbeteckning", "andamal", "lager")}
+                for r in rattigheter[analys.byggnad_id]
+            ]
         traffar.append(traff)
 
     resultat = {
@@ -284,6 +306,10 @@ def analysera_punkt(
             {"beskrivning": f"{BYGGNAD_LAYER} (WFS)", "url": _getfeature_url(ows_url, BYGGNAD_LAYER, bbox)},
             {"beskrivning": f"{STRANDSKYDD_LAYER} (WFS)", "url": _getfeature_url(ows_url, STRANDSKYDD_LAYER, bbox)},
             {"beskrivning": "Miljöbalken 7 kap. (SFS 1998:808)", "url": REGELVERK_KALLA_URL},
+        ]
+        + [
+            {"beskrivning": f"{lager} (WFS)", "url": _getfeature_url(ows_url, lager, bbox)}
+            for lager in ratt_lager
         ],
         "hamtad": nu,
     }
@@ -317,7 +343,7 @@ def kor_fall7(
     Returns:
         Path to the written dossier.md.
     """
-    bbox, _byggnader, analyser, juridik, osakerheter, komplement = _hamta_underlag(
+    bbox, _byggnader, analyser, juridik, osakerheter, komplement, rattigheter, _ratt_lager = _hamta_underlag(
         ows_url, punkt, radie_m, nu, hamta_wfs
     )
     osakerheter = osakerheter + _upphavt_konflikter(komplement, analyser)
@@ -342,6 +368,10 @@ def kor_fall7(
             )
             for lager, refs in per_lager.items()
         ]
+    for byggnad_id, traffar in rattigheter.items():
+        komplement_fakta.setdefault(byggnad_id, []).extend(
+            _rattighet_fakta(byggnad_id, traffar, ows_url, bbox, nu)
+        )
 
     dossier = bygg_dossier(
         rubrik=(
@@ -438,25 +468,30 @@ def _rattighet_post(feature: dict, lager: str) -> dict:
     }
 
 
-def _rattigheter_for_byggnad(
+def _hamta_rattighetslager(
     ows_url: str,
-    footprint,
     bbox: tuple,
     hamta_wfs: Callable,
-) -> tuple[list[dict], list[str], list[str]]:
-    """(rättigheter som berör footprint, osäkerheter, lager som faktiskt svarade)."""
-    traffar: list[dict] = []
+) -> tuple[dict[str, dict], list[str]]:
+    """Rättighetslagren inom bbox: ({lager: FeatureCollection} för dem som svarade, osäkerheter)."""
+    lager_fc: dict[str, dict] = {}
     osakerheter: list[str] = []
-    svarade: list[str] = []
-    sedda: set[tuple[str, str]] = set()
     for lager in RATTIGHET_LAGER:
         try:
             fc = hamta_wfs(ows_url, lager, bbox=bbox, max_features=200)
         except Exception:
             osakerheter.append(M("runner.rattighetslager_otillgangligt", lager=lager))
             continue
-        svarade.append(lager)
         osakerheter += _kallforbehall(fc, lager)
+        lager_fc[lager] = fc
+    return lager_fc, osakerheter
+
+
+def _rattigheter_som_beror(lager_fc: dict[str, dict], footprint) -> list[dict]:
+    """Rättigheter (dedup på typ+aktbeteckning) vars geometri skär footprint."""
+    traffar: list[dict] = []
+    sedda: set[tuple[str, str]] = set()
+    for lager, fc in lager_fc.items():
         for feature in fc.get("features", []):
             if not feature.get("geometry"):
                 continue
@@ -468,7 +503,18 @@ def _rattigheter_for_byggnad(
                 continue
             sedda.add(nyckel)
             traffar.append(post)
-    return traffar[:_MAX_RATTIGHETER], osakerheter, svarade
+    return traffar[:_MAX_RATTIGHETER]
+
+
+def _rattigheter_for_byggnad(
+    ows_url: str,
+    footprint,
+    bbox: tuple,
+    hamta_wfs: Callable,
+) -> tuple[list[dict], list[str], list[str]]:
+    """(rättigheter som berör footprint, osäkerheter, lager som faktiskt svarade)."""
+    lager_fc, osakerheter = _hamta_rattighetslager(ows_url, bbox, hamta_wfs)
+    return _rattigheter_som_beror(lager_fc, footprint), osakerheter, list(lager_fc)
 
 
 def _rattighet_fakta(byggnad_id: str, rattigheter: list[dict], ows_url: str, bbox: tuple, nu: str) -> list[Fakta]:
@@ -1225,8 +1271,8 @@ def fall7_geometri(
     Raises:
         ValueError: ingen byggnad hittades inom radien.
     """
-    bbox, byggnader, analyser, juridik, osakerheter, komplement = _hamta_underlag(
-        ows_url, punkt, radie_m, nu, hamta_wfs
+    bbox, byggnader, analyser, juridik, osakerheter, komplement, _rattigheter, _ratt_lager = (
+        _hamta_underlag(ows_url, punkt, radie_m, nu, hamta_wfs)
     )
     vald = _valj_byggnad(byggnader, punkt, radie_m)
     vald_byggnad_id = str(vald.get("id"))

@@ -16,10 +16,11 @@ const IKONER = {
   strandskydd: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 18c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 6c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>',
   vag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M5 7l7-4 7 4"/><path d="M3 12h4l2 5 2-9 2 7 2-3h6"/></svg>',
   pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>',
-  snedbild: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l4-4h10l4 4v13H3z"/><path d="M3 7h18"/><circle cx="12" cy="14" r="3.5"/></svg>'
+  snedbild: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l4-4h10l4 4v13H3z"/><path d="M3 7h18"/><circle cx="12" cy="14" r="3.5"/></svg>',
+  radar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12l6.5-6.5"/><circle cx="12" cy="12" r="1"/></svg>'
 };
 
-export function skapaPanel({ t, onSprak, onKollaps, onRetry }) {
+export function skapaPanel({ t, onSprak, onKollaps, onRetry, onRadar, onRadarVal, onRadarTillbaka }) {
   let texts = t;
   const el = document.createElement('aside');
   el.className = 'gt-panel';
@@ -54,6 +55,7 @@ export function skapaPanel({ t, onSprak, onKollaps, onRetry }) {
             <span class="gt-panel__kontext">${escapeHtml(texts.appKontext)}</span></div>
         </div>
         <div class="gt-panel__knappar">
+          <button class="gt-knapp gt-radarknapp" type="button" aria-label="${escapeHtml(texts.radarKnappAria)}" title="${escapeHtml(texts.radarKnappAria)}">${IKONER.radar}<span>${escapeHtml(texts.radarKnapp)}</span></button>
           <button class="gt-knapp gt-sprak" type="button" aria-label="${escapeHtml(texts.sprakKnappAria)}">${escapeHtml(texts.sprakKnapp)}</button>
           <button class="gt-knapp gt-knapp--ikon gt-kollaps" type="button" aria-label="${escapeHtml(texts.kollapsAria)}">›</button>
         </div>
@@ -62,7 +64,12 @@ export function skapaPanel({ t, onSprak, onKollaps, onRetry }) {
       <footer class="gt-panel__fot">${IKONER.vag}<span>${escapeHtml(texts.beslutText)}</span></footer>`;
     el.querySelector('.gt-sprak').addEventListener('click', onSprak);
     el.querySelector('.gt-kollaps').addEventListener('click', onKollaps);
+    el.querySelector('.gt-radarknapp').addEventListener('click', () => onRadar && onRadar());
   }
+
+  // Radarn är aktiv när en skanning finns att gå tillbaka till: analysvyn får
+  // då en "Till radarlistan"-rad överst.
+  let radarAktiv = false;
 
   function kropp() { return el.querySelector('.gt-panel__kropp'); }
   function kort(key) { return el.querySelector(`.gt-kort[data-check="${key}"]`); }
@@ -82,8 +89,19 @@ export function skapaPanel({ t, onSprak, onKollaps, onRetry }) {
     inneh.innerHTML = '';
   }
 
+  function radarTillbakaRad() {
+    if (!radarAktiv) return '';
+    return `<button type="button" class="gt-knapp gt-radar__tillbaka">‹ ${escapeHtml(texts.radarTillbaka)}</button>`;
+  }
+
+  function kopplaRadarTillbaka() {
+    const knapp = kropp().querySelector('.gt-radar__tillbaka');
+    if (knapp) knapp.addEventListener('click', () => onRadarTillbaka && onRadarTillbaka());
+  }
+
   function startaAnalys() {
     kropp().innerHTML = `
+      ${radarTillbakaRad()}
       <div class="gt-fastighet">
         <span class="gt-fastighet__etikett">${escapeHtml(texts.fastighet)}</span>
         <div class="gt-fastighet__namn"><span class="gt-skelett" style="width:9rem"></span></div>
@@ -99,6 +117,70 @@ export function skapaPanel({ t, onSprak, onKollaps, onRetry }) {
         <div class="gt-snedbild__bilder"></div>
       </section>`;
     CHECK_KEYS.forEach(setCardLoading);
+    kopplaRadarTillbaka();
+  }
+
+  /* --- tillsynsradar: kandidatlista för hela den synliga vyn --- */
+
+  function radarSkal() {
+    return `<section class="gt-radar">
+      <div class="gt-kort__huvud">
+        <span class="gt-kort__ikon">${IKONER.radar}</span>
+        <div><h3>${escapeHtml(texts.radarRubrik)}</h3>
+          <span class="gt-kort__under">${escapeHtml(texts.radarUnder)}</span></div>
+      </div>
+      <div class="gt-radar__status"></div>
+      <div class="gt-radar__innehall"></div>
+    </section>`;
+  }
+
+  function radarEl() { return kropp().querySelector('.gt-radar'); }
+
+  function setRadarLoading() {
+    radarAktiv = true;
+    kropp().innerHTML = radarSkal();
+    radarEl().querySelector('.gt-radar__status').innerHTML =
+      '<span class="gt-skelett"></span><span class="gt-skelett"></span>';
+  }
+
+  /**
+   * @param {string} rubrik Rubrikraden (t.ex. "3 kandidater av 57 byggnader i vyn").
+   * @param {string} html Listans HTML (radar.mjs). Varje `.gt-radar__val` bär
+   *   data-e/data-n (EPSG:3014) och klick går till onRadarVal(e, n).
+   */
+  function setRadarResult(rubrik, html) {
+    radarAktiv = true;
+    if (!radarEl()) kropp().innerHTML = radarSkal();
+    const r = radarEl();
+    r.querySelector('.gt-radar__status').innerHTML =
+      `<div class="gt-rubrikrad">${escapeHtml(rubrik)}</div>`;
+    const inneh = r.querySelector('.gt-radar__innehall');
+    inneh.innerHTML = html;
+    inneh.querySelectorAll('.gt-radar__val').forEach((knapp) => {
+      knapp.addEventListener('click', () => {
+        const e = Number(knapp.dataset.e);
+        const n = Number(knapp.dataset.n);
+        if (Number.isFinite(e) && Number.isFinite(n) && onRadarVal) onRadarVal(e, n);
+      });
+    });
+  }
+
+  function setRadarInfo(text) {
+    radarAktiv = true;
+    if (!radarEl()) kropp().innerHTML = radarSkal();
+    const r = radarEl();
+    r.querySelector('.gt-radar__status').innerHTML = `<div class="gt-info">${escapeHtml(text)}</div>`;
+    r.querySelector('.gt-radar__innehall').innerHTML = '';
+  }
+
+  function setRadarError(message) {
+    if (!radarEl()) kropp().innerHTML = radarSkal();
+    const r = radarEl();
+    r.querySelector('.gt-radar__status').innerHTML =
+      `<div class="gt-kort__fel"><span>${escapeHtml(message)}</span>
+        <button class="gt-knapp gt-knapp--primar" type="button">${escapeHtml(texts.forsokIgen)}</button></div>`;
+    r.querySelector('.gt-kort__fel .gt-knapp').addEventListener('click', () => onRadar && onRadar());
+    r.querySelector('.gt-radar__innehall').innerHTML = '';
   }
 
   /* --- snedbilder (MapSpace): fyra riktningar, bilder proxas via backend --- */
@@ -230,11 +312,23 @@ export function skapaPanel({ t, onSprak, onKollaps, onRetry }) {
       sned.querySelector('h3').textContent = texts.snedbildRubrik;
       sned.querySelector('.gt-kort__under').textContent = texts.snedbildUnder;
     }
+    const radarKnapp = el.querySelector('.gt-radarknapp');
+    radarKnapp.querySelector('span').textContent = texts.radarKnapp;
+    radarKnapp.setAttribute('aria-label', texts.radarKnappAria);
+    radarKnapp.setAttribute('title', texts.radarKnappAria);
+    const radar = radarEl();
+    if (radar) {
+      radar.querySelector('h3').textContent = texts.radarRubrik;
+      radar.querySelector('.gt-kort__under').textContent = texts.radarUnder;
+    }
+    const tillbaka = kropp().querySelector('.gt-radar__tillbaka');
+    if (tillbaka) tillbaka.textContent = `‹ ${texts.radarTillbaka}`;
   }
 
   render();
   visaTomlage();
   return { el, tabEl, setCollapsed, visaTomlage, startaAnalys, setFastighet,
     setCardLoading, setCardResult, setCardInfo, setCardError, uppdateraTexter,
-    setSnedbilderLoading, setSnedbilderInfo, setSnedbilder };
+    setSnedbilderLoading, setSnedbilderInfo, setSnedbilder,
+    setRadarLoading, setRadarResult, setRadarInfo, setRadarError };
 }

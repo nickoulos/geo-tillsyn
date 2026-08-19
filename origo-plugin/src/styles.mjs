@@ -9,7 +9,7 @@ export const STYLE_ID = 'gt-styles';
 
 export function cssText() {
   return `
-.gt-panel, .gt-tidslinje, .gt-tab, .gt-legend {
+.gt-panel, .gt-biografi, .gt-tab, .gt-legend {
   --gt-accent: #1e4ed8;
   --gt-accent-mork: #173db0;
   --gt-accent-ljus: #eaf0fe;
@@ -25,18 +25,19 @@ export function cssText() {
   --gt-fel-bg: #fdf0f0;
   --gt-radie: 8px;
   --gt-skugga: 0 1px 2px rgba(22,32,46,.08), 0 4px 16px rgba(22,32,46,.10);
+  --gt-panel-bredd: 380px;
   font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: var(--gt-ink);
   font-size: 13px;
   line-height: 1.5;
   box-sizing: border-box;
 }
-.gt-panel *, .gt-tidslinje *, .gt-tab *, .gt-legend * { box-sizing: inherit; }
+.gt-panel *, .gt-biografi *, .gt-tab *, .gt-legend * { box-sizing: inherit; }
 
 /* ---------- sidopanel ---------- */
 .gt-panel {
   position: absolute; top: 0; right: 0; bottom: 0;
-  width: 380px; max-width: 92vw;
+  width: var(--gt-panel-bredd); max-width: 92vw;
   display: flex; flex-direction: column;
   background: var(--gt-yta);
   border-left: 1px solid var(--gt-kant);
@@ -76,7 +77,7 @@ export function cssText() {
   padding: .25rem .55rem; transition: background .15s ease, border-color .15s ease;
 }
 .gt-knapp:hover { background: var(--gt-yta-svag); border-color: #c4cdda; }
-.gt-knapp:focus-visible, .gt-tidslinje input:focus-visible {
+.gt-knapp:focus-visible {
   outline: 2px solid var(--gt-accent); outline-offset: 1px;
 }
 .gt-knapp--primar { background: var(--gt-accent); border-color: var(--gt-accent); color: #fff; }
@@ -183,42 +184,115 @@ export function cssText() {
 .gt-kallor a { color: var(--gt-accent); text-decoration: none; }
 .gt-kallor a:hover { text-decoration: underline; }
 
-/* ---------- tidslinjepill ---------- */
-.gt-tidslinje {
-  position: absolute; bottom: 1.1rem; left: 50%; transform: translateX(-50%);
-  width: min(560px, 60vw);
-  background: var(--gt-yta); border: 1px solid var(--gt-kant);
-  border-radius: 14px; box-shadow: var(--gt-skugga);
-  padding: .55rem .8rem .5rem; z-index: 39;
-  transition: left .2s ease;
+/* ---------- tillsynsradar ---------- */
+.gt-radarknapp { display: inline-flex; align-items: center; gap: .3rem; }
+.gt-radarknapp svg { width: 14px; height: 14px; color: var(--gt-accent); }
+.gt-radar { border: 1px solid var(--gt-kant); border-radius: var(--gt-radie);
+  background: var(--gt-yta); overflow: hidden; }
+.gt-radar__status { padding: .5rem .8rem; }
+.gt-radar__innehall { padding: 0 .8rem .6rem; }
+.gt-radar__lista { list-style: none; margin: 0; padding: 0; }
+.gt-radar__rad { border-top: 1px solid var(--gt-kant); }
+.gt-radar__val { display: flex; align-items: center; gap: .6rem; width: 100%;
+  padding: .5rem .1rem; border: none; background: none; cursor: pointer;
+  font: inherit; color: inherit; text-align: left; border-radius: 6px; }
+.gt-radar__val:hover { background: var(--gt-yta-svag); }
+.gt-radar__val:focus-visible { outline: 2px solid var(--gt-accent); outline-offset: 1px; }
+.gt-radar__rang { display: grid; place-items: center; flex: none; width: 26px; height: 26px;
+  border-radius: 50%; background: var(--gt-accent); color: #fff; font-weight: 800; font-size: 12px; }
+.gt-radar__kropp { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.gt-radar__fastighet { font-weight: 700; font-size: 13px; }
+.gt-radar__fastighet--saknas { font-weight: 400; color: var(--gt-ink-svag); font-style: italic; }
+.gt-radar__meta { font-size: 11.5px; color: var(--gt-ink-svag); overflow-wrap: anywhere; }
+.gt-radar__poang { flex: none; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: var(--gt-accent-mork); font-size: 13px; }
+.gt-radar__grunder { margin: 0 0 .4rem 2.1rem; font-size: 11.5px; color: var(--gt-ink-svag); }
+.gt-radar__grunder summary { cursor: pointer; list-style: none; }
+.gt-radar__grunder summary::-webkit-details-marker { display: none; }
+.gt-radar__grunder summary::before { content: '▸ '; font-size: 10px; }
+.gt-radar__grunder[open] summary::before { content: '▾ '; }
+.gt-radar__grunder ul { margin: .2rem 0 0; padding-left: 1rem; }
+.gt-radar__not { margin: .6rem 0 .3rem; padding: .5rem .6rem; font-size: 12px;
+  background: var(--gt-accent-ljus); color: var(--gt-accent-mork); border-radius: 6px; }
+.gt-radar__modell { margin: 0; padding-left: 1rem; font-size: 12px; }
+.gt-radar__tillbaka { display: inline-block; margin-bottom: .7rem; }
+
+/* ---------- fastighetsbiografin (biografi-stripen) ---------- */
+.gt-biografi {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 170px;
+  background: var(--gt-yta); border-top: 1px solid var(--gt-kant);
+  box-shadow: 0 -4px 16px rgba(22,32,46,.08); z-index: 39;
+  display: flex; flex-direction: column;
+  transition: padding-right .2s ease, height .2s ease;
 }
-.gt-oppen .gt-tidslinje { left: calc(50% - 190px); }
-@media (max-width: 900px) { .gt-oppen .gt-tidslinje { display: none; } }
-.gt-tidslinje__rad { display: flex; align-items: center; gap: .6rem; }
-.gt-tidslinje__ar { font-size: 20px; font-weight: 800; letter-spacing: -.02em;
-  min-width: 3.1rem; text-align: right; font-variant-numeric: tabular-nums; }
-.gt-tidslinje__spar { position: relative; flex: 1; padding-bottom: 7px; }
-.gt-tidslinje__slider { width: 100%; margin: 0; accent-color: var(--gt-accent); }
-.gt-tidslinje__ticks { position: absolute; left: 8px; right: 8px; bottom: 0; height: 5px; }
-.gt-tick { position: absolute; width: 2px; height: 5px; border-radius: 1px;
-  background: #b9c3d2; transform: translateX(-50%); }
-.gt-tick--aktiv { background: var(--gt-accent); }
-.gt-tidslinje__regeltoggle {
-  display: flex; align-items: center; gap: .45rem; width: 100%;
-  margin-top: .45rem; padding: .3rem .45rem;
-  border: none; border-top: 1px solid var(--gt-kant); background: none;
-  font: inherit; font-size: 12px; color: var(--gt-ink-svag);
-  cursor: pointer; text-align: left;
+.gt-oppen .gt-biografi { padding-right: var(--gt-panel-bredd); }
+.gt-biografi--kollapsad { height: 40px; }
+@media (max-width: 900px) { .gt-biografi { height: 40px; } .gt-biografi .gt-biografi__kropp { display: none; } }
+.gt-biografi--kollapsad .gt-biografi__kropp { display: none; }
+.gt-biografi__kropp { flex: 1; display: flex; overflow: hidden; padding: .3rem 0 0; }
+.gt-biografi__etiketter {
+  flex: none; width: 92px; display: flex; flex-direction: column;
+  padding: 0 .5rem; box-sizing: border-box;
 }
-.gt-tidslinje__regeltoggle:hover { color: var(--gt-ink); }
-.gt-tidslinje__regeltoggle .gt-chevron { margin-left: auto; flex: none; transition: transform .15s ease; }
-.gt-tidslinje__regeltoggle[aria-expanded="true"] .gt-chevron { transform: rotate(180deg); }
-.gt-regel-sammanfattning { flex: 1; min-width: 0; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap; }
-.gt-tidslinje__regeldetalj { padding: .3rem .45rem .45rem; font-size: 12.5px;
-  max-height: 40vh; overflow-y: auto; }
+.gt-biografi__etikett {
+  flex: 1; display: flex; align-items: center;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .03em;
+  color: var(--gt-ink-svag); line-height: 1.15;
+}
+.gt-biografi__svgwrap { position: relative; flex: 1; min-width: 0; }
+.gt-biografi__svg { display: block; width: 100%; height: 100%; }
+.gt-biografi__regelpop {
+  position: absolute; right: .5rem; bottom: 2.4rem; z-index: 2;
+  width: min(320px, 90%); max-height: 65%; overflow-y: auto;
+  background: var(--gt-yta); border: 1px solid var(--gt-kant); border-radius: var(--gt-radie);
+  box-shadow: var(--gt-skugga); padding: .5rem .6rem; font-size: 12.5px;
+}
 .gt-regelrubrik { font-size: 12px; font-weight: 700; margin-bottom: .1rem; }
 .gt-regelnot { font-size: 11px; color: var(--gt-ink-svag); margin-bottom: .35rem; }
+.gt-biografi__rad {
+  flex: none; display: flex; align-items: center; gap: .5rem;
+  height: 40px; padding: 0 .8rem; border-top: 1px solid var(--gt-kant);
+}
+.gt-biografi__ar { font-size: 15px; font-weight: 800; letter-spacing: -.02em;
+  min-width: 2.9rem; text-align: center; font-variant-numeric: tabular-nums; }
+.gt-biografi__regelknapp { margin-left: auto; font-size: 12px; }
+.gt-biografi--kollapsad .gt-biografi__regelknapp { display: none; }
+.gt-biografi__kollaps .gt-chevron { transition: transform .15s ease; }
+.gt-biografi__kollaps[aria-expanded="false"] .gt-chevron { transform: rotate(180deg); }
+
+/* svg-innehåll: teckensnitt/färger styrs härifrån, inte inline i biografi.js */
+.gt-biografi__svg text.gt-bio-etikett {
+  font-family: inherit; font-size: 9.5px; fill: var(--gt-ink-svag);
+}
+.gt-biografi__svg text.gt-bio-etikett--avviker { fill: var(--gt-varning-ink); font-weight: 700; }
+.gt-biografi__svg text.gt-bio-etikett--band { fill: var(--gt-ink); font-size: 10px; font-weight: 600; }
+
+.gt-bio-punkt { stroke-width: 1.5; }
+.gt-bio-punkt--narvaro { fill: var(--gt-accent); stroke: var(--gt-accent); }
+.gt-bio-punkt--franvaro { fill: none; stroke: #b9c3d2; }
+.gt-bio-punkt--otydlig { fill: var(--gt-varning-ink); stroke: var(--gt-varning-ink); }
+.gt-bio-punkt--utesluten { fill: none; stroke: #b9c3d2; stroke-dasharray: 2 2; }
+.gt-bio-punkt--okand { fill: none; stroke: #dde3ec; stroke-width: 1; }
+.gt-bio-klammer line { stroke: var(--gt-ink-svag); stroke-width: 1; }
+
+.gt-bio-gap { stroke: var(--gt-varning-ink); stroke-width: 2; stroke-dasharray: 4 3; }
+.gt-bio-romb { fill: var(--gt-accent-mork); }
+.gt-bio-dokument { fill: var(--gt-accent-ljus); stroke: var(--gt-accent); stroke-width: 1; }
+
+.gt-bio-lagband { fill: var(--gt-accent-ljus); opacity: .45; }
+.gt-bio-lagband--aktiv { opacity: 1; }
+.gt-bio-lovbefrielse { fill: var(--gt-accent-mork); opacity: .7; }
+.gt-bio-strandskydd { fill: rgba(40,150,120,.12); stroke: rgba(40,150,120,.4); stroke-width: 1; }
+
+.gt-bio-klocka { stroke: var(--gt-ink); stroke-width: 4; stroke-linecap: butt; }
+.gt-bio-klocka--osaker { stroke: var(--gt-ink-svag); stroke-width: 4; stroke-dasharray: 3 2; }
+.gt-bio-pil { fill: var(--gt-ink); }
+
+.gt-bio-axel-linje { stroke: var(--gt-kant); stroke-width: 1; }
+.gt-bio-tick { stroke: #b9c3d2; stroke-width: 1.5; cursor: pointer; }
+.gt-bio-tick--aktiv { stroke: var(--gt-accent); stroke-width: 2; }
+.gt-bio-idag { stroke: var(--gt-ink-svag); stroke-width: 1; stroke-dasharray: 1 2; }
+.gt-bio-cursor { stroke: var(--gt-accent); stroke-width: 2; }
 
 /* staplade rader (etikett över värde) — för meningslånga värden som regelverket */
 .gt-rad--stack { display: block; padding: .3rem 0; }
@@ -227,7 +301,7 @@ export function cssText() {
 .gt-rad--stack .gt-rad__varde { display: block; text-align: left; font-weight: 400; }
 
 /* ---------- kartlegend (Fall 3-overlay) ---------- */
-.gt-legend { position: absolute; bottom: 1.1rem; left: 1.1rem; z-index: 39;
+.gt-legend { position: absolute; bottom: calc(170px + 1.1rem); left: 1.1rem; z-index: 39;
   display: flex; gap: .8rem; align-items: center;
   background: var(--gt-yta); border: 1px solid var(--gt-kant); border-radius: 8px;
   box-shadow: var(--gt-skugga); padding: .35rem .7rem; font-size: 12px; }

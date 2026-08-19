@@ -230,9 +230,67 @@ _SV: dict[str, Callable[..., str]] = {
         "PBL/ÄPBL övergångsbestämmelser + preskription (regelverk_vid)"
     ),
     "kalla.snedbilder_mapspace": lambda: "Snedbilder (MapSpace, Sundsvalls kommun)",
+    # --- radar.py: tillsynsradar — poängsättning som redovisas öppet ---
+    "radar.poang_inom": lambda: "Byggnaden ligger helt inom strandskyddszon (+3).",
+    "radar.poang_delvis": lambda andel: (
+        f"Byggnaden ligger delvis inom strandskyddszon ({round(andel * 100)} %) (+2)."
+    ),
+    "radar.poang_gallde_vid_uppforande": lambda ar: (
+        f"Strandskyddet gällde redan när byggnaden uppfördes ({ar}) — "
+        "dispensplikt vid uppförandet (+3)."
+    ),
+    "radar.poang_fore_strandskydd": lambda ar: (
+        f"Uppförd {ar}, innan strandskyddet gällde på platsen — ingen dispensplikt "
+        "vid uppförandet (+0)."
+    ),
+    "radar.poang_ar_okant": lambda: (
+        "Tillkomstår ej fastställt i registret — kan inte uteslutas; datera via "
+        "ortofoto-tidslinjen (+1)."
+    ),
+    "radar.poang_ar_ikrafttradandear": lambda ar: (
+        f"Uppförd ikraftträdandeåret {ar} — månad krävs för att avgöra regimen (+1)."
+    ),
+    "radar.poang_utvidgat": lambda: (
+        "Berör även utvidgat strandskydd enligt Länsstyrelsen (+1)."
+    ),
+    "radar.kallkonflikt_upphavt": lambda referens: (
+        f"Berör upphävt strandskydd ({referens}) — källkonflikt mot kommunens "
+        "zonlager; granska innan åtgärd (±0)."
+    ),
+    "radar.modell_lage": lambda: (
+        "Läge: helt inom zon +3, delvis inom +2, utanför = ingen kandidat."
+    ),
+    "radar.modell_regim": lambda: (
+        "Regim vid uppförandet: strandskyddet gällde redan +3, gällde inte +0, "
+        "ikraftträdandeår +1 (månad saknas)."
+    ),
+    "radar.modell_ar_okant": lambda: (
+        "Tillkomstår okänt i registret +1 — aldrig uteslutet, aldrig högst."
+    ),
+    "radar.modell_utvidgat": lambda: (
+        "Utvidgat strandskydd (Länsstyrelsen) +1; upphävt strandskydd ger ingen poäng "
+        "men flaggas som källkonflikt."
+    ),
+    "radar.juridisk_not": lambda: (
+        "Listan är kandidater för granskning, rangordnade efter hur tydligt byggnad "
+        "och strandskyddszon sammanfaller över tid — inte beslut och inte påståenden "
+        "om överträdelse. Dispenser är inte kontrollerade. Systematisk skanning ger "
+        "samma måttstock för alla; handläggaren beslutar, alltid."
+    ),
+    "radar.fastighetslager_otillgangligt": lambda lager: (
+        f"Fastighetslagret {lager} kunde inte hämtas — kandidater redovisas utan "
+        "fastighetsbeteckning."
+    ),
+    "radar.zon_for_stor": lambda area_km2, max_km2: (
+        f"Zonen är {area_km2} km² — radarn skannar högst {max_km2} km² åt gången; "
+        "zooma in eller dela upp."
+    ),
     # --- server.py: HTTP-fel ---
     "server.parametrar_ogiltiga": lambda detalj: (
         f"easting/northing saknas eller kunde inte tolkas: {detalj}"
+    ),
+    "server.bbox_ogiltig": lambda detalj: (
+        f"bbox saknas eller kunde inte tolkas (minE,minN,maxE,maxN i EPSG:3014): {detalj}"
     ),
     "server.internt_fel": lambda: "internt fel",
 }
