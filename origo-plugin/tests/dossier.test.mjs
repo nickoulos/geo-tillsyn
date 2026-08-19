@@ -177,3 +177,19 @@ test('renderCheckBody: rattigheter och snedbilder renderas inte generiskt (JSON-
   assert.ok(!html.includes('viewer_url'));
   assert.ok(!html.includes('"tillganglig"'));
 });
+
+test('renderCheckBody: rättigheter per fall 7-träff renderas som lista, inte JSON', () => {
+  const data = {
+    antal_traffar: 1, antal_byggnader: 2, osakerheter: [], kallor: [],
+    traffar: [{
+      byggnad_id: 'BAL-1', laege: 'inom',
+      rattigheter: [{ typ: 'Officialservitut', aktbeteckning: '2281-91/12', andamal: 'VÄG', lager: 'Lantmateriet:rk_rattighet_y' }]
+    }]
+  };
+  const html = renderCheckBody(data, TEXTS.sv, 'sv');
+  assert.match(html, /gt-rattigheter/);
+  assert.match(html, /2281-91\/12/);
+  assert.match(html, /VÄG/);
+  assert.doesNotMatch(html, /aktbeteckning&quot;/);
+  assert.doesNotMatch(html, /\{&quot;typ/);
+});

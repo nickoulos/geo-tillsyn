@@ -2,6 +2,7 @@ import Origo from 'Origo';
 import { TEXTS, meddelandeText } from './i18n.mjs';
 import { composeHeadline, renderCheckBody, escapeHtml } from './dossier.mjs';
 import { renderKontextSammanfattning, renderKontextDetalj } from './regelverk.mjs';
+import { renderRadarLista, renderRadarRubrik, bboxFranExtent } from './radar.mjs';
 import { injectStyles } from './styles.mjs';
 import { skapaPanel } from './panel.js';
 import { skapaTidslinje } from './timeline.js';
@@ -35,6 +36,12 @@ import { skapaTidslinje } from './timeline.js';
  * parallellt och renderar ett kontrollkort per check med neutral rubrik
  * (src/dossier.mjs). Stilarna injiceras som design-tokens (src/styles.mjs).
  * Fall 3-överlägget (godkänt blått / verkligt rött) får en kartlegend.
+ *
+ * v0.7 — Tillsynsradar: "Skanna vyn" kör samma motor över hela den synliga
+ * kartvyn (`/api/radar?bbox=`) och renderar en rangordnad kandidatlista
+ * (src/radar.mjs) med numrerade markörer i kartan; klick på en kandidat
+ * hoppar dit och kör den vanliga ett-klicks-granskningen. Poängmodellen är
+ * backendens och redovisas öppet; listan är kandidater — handläggaren beslutar.
  */
 
 const DEFAULT_ARSLAGER = {
@@ -107,6 +114,9 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
   // lika mycket innehåll som ett resultat.
   const senasteStatus = {};
   let overlayLayer = null;
+  let radarLayer = null;
+  let senasteRadar = null;
+  let radarTimers = [];
 
   function t() {
     return TEXTS[aktivtSprak];
@@ -419,6 +429,133 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     renderaSnedbilder();
   }
 
+  /* --- tillsynsradar: skanna synlig vy -> /api/radar -> lista + markörer --- */
+
+  function rensaRadarMarkorer() {
+    radarTimers.forEach(clearTimeout);
+    radarTimers = [];
+    if (radarLayer) radarLayer.getSource().clear();
+  }
+
+  function radarMarkorStil(ol, rang) {
+    return new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 11,
+        fill: new ol.style.Fill({ color: 'rgba(30,78,216,0.92)' }),
+        stroke: new ol.style.Stroke({ color: '#fff', width: 2 })
+      }),
+      text: new ol.style.Text({
+        text: String(rang),
+        font: 'bold 11px sans-serif',
+        fill: new ol.style.Fill({ color: '#fff' })
+      })
+    });
+  }
+
+  // Kandidaterna dyker upp en efter en (rang 1 först) — samma data, men
+  // skanningens resultat blir läsbart i rummet i stället för en klump.
+  function ritaRadarMarkorer(data) {
+    const ol = getOl();
+    rensaRadarMarkorer();
+    if (!ol || !radarLayer || !epsg3014Registrerad) return;
+    const till = viewer.getProjection().getCode();
+    (data.kandidater || []).forEach((k, i) => {
+      if (!k.centroid) return;
+      let xy;
+      try {
+        xy = projicera([k.centroid.easting, k.centroid.northing], 'EPSG:3014', till);
+      } catch (err) {
+        return;
+      }
+      if (!xy) return;
+      const timer = setTimeout(() => {
+        const f = new ol.Feature({ geometry: new ol.geom.Point(xy), rang: k.rang });
+        f.setStyle(radarMarkorStil(ol, k.rang));
+        radarLayer.getSource().addFeature(f);
+      }, 120 * i);
+      radarTimers.push(timer);
+    });
+  }
+
+  function renderaRadar() {
+    if (!senasteRadar) return;
+    panel.setRadarResult(renderRadarRubrik(senasteRadar, t()),
+      renderRadarLista(senasteRadar, t(), aktivtSprak));
+  }
+
+  async function korRadar() {
+    if (kollapsad) setKollapsad(false);
+    const map = viewer.getMap();
+    const extent = map.getView().calculateExtent(map.getSize());
+    const from = viewer.getProjection().getCode();
+    let bbox;
+    try {
+      bbox = epsg3014Registrerad ? bboxFranExtent(extent, (xy) => projicera(xy, from, 'EPSG:3014')) : null;
+    } catch (err) {
+      bbox = null;
+    }
+    if (!bbox) {
+      panel.setRadarError(`${t().radarFel} (EPSG:3014)`);
+      return;
+    }
+    panel.setRadarLoading();
+    rensaRadarMarkorer();
+    clearOverlay();
+    visaLegend(false);
+    let data;
+    let status = 0;
+    try {
+      const url = `${apiUrl}/api/radar?bbox=${bbox.map((v) => encodeURIComponent(v.toFixed(1))).join(',')}`;
+      const resp = await fetch(url);
+      status = resp.status;
+      data = await resp.json();
+    } catch (err) {
+      console.error('geotillsyn: /api/radar misslyckades', err);
+      panel.setRadarError(t().radarFel);
+      return;
+    }
+    if (status === 400 && data && data.fel) {
+      // För stor zon m.m.: ett deklarerat nej från backend, inte ett fel i UI:t.
+      senasteRadar = null;
+      panel.setRadarInfo(meddelandeText(data.fel, aktivtSprak));
+      return;
+    }
+    if (status >= 400) {
+      panel.setRadarError((data && data.fel) ? meddelandeText(data.fel, aktivtSprak) : `HTTP ${status}`);
+      return;
+    }
+    senasteRadar = data;
+    renderaRadar();
+    ritaRadarMarkorer(data);
+  }
+
+  // Klick på en kandidat: centrera kartan där och kör den vanliga
+  // ett-klicks-granskningen — radarn pekar, motorn granskar, handläggaren beslutar.
+  function valjRadarKandidat(e3014, n3014) {
+    const till = viewer.getProjection().getCode();
+    let xy;
+    try {
+      xy = projicera([e3014, n3014], 'EPSG:3014', till);
+    } catch (err) {
+      xy = null;
+    }
+    if (!xy) return;
+    const view = viewer.getMap().getView();
+    view.animate({ center: xy, zoom: Math.max(view.getZoom() || 0, 16), duration: 500 });
+    pahandlaKlick({ coordinate: xy });
+  }
+
+  function initRadarLayer() {
+    const ol = getOl();
+    if (!ol) return;
+    radarLayer = new ol.layer.Vector({
+      source: new ol.source.Vector(),
+      name: 'geotillsyn-radar',
+      zIndex: 51
+    });
+    viewer.getMap().addLayer(radarLayer);
+  }
+
   async function pahandlaKlick(evt) {
     // Ett kartklick är alltid en analysbegäran: är panelen ihopfälld öppnas
     // den — ett klick får aldrig se ut att göra ingenting.
@@ -504,6 +641,7 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     new Set([...Object.keys(senasteData), ...Object.keys(senasteStatus)])
       .forEach(renderaKort);
     renderaSnedbilder();
+    if (senasteRadar && panel.el.querySelector('.gt-radar')) renderaRadar();
     visaAr(aktuelltAr);
     if (legendEl && !legendEl.hidden) visaLegend(true);
   }
@@ -535,7 +673,10 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
         onRetry: (key) => {
           const check = CHECKS.find((c) => c.key === key);
           if (check && senastePunkt3014) korOchRendera(check, senastePunkt3014);
-        }
+        },
+        onRadar: korRadar,
+        onRadarVal: valjRadarKandidat,
+        onRadarTillbaka: renderaRadar
       });
       panel.tabEl.addEventListener('click', () => setKollapsad(false));
       tidslinje = skapaTidslinje({ years, startAr: aktuelltAr, t: t(), onArByte: visaAr });
@@ -552,6 +693,7 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
 
       registreraEpsg3014();
       initOverlayLayer();
+      initRadarLayer();
       viewer.getMap().on('singleclick', pahandlaKlick);
 
       fetch(reglerUrl)

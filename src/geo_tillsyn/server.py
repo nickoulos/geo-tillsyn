@@ -22,7 +22,10 @@ from geo_tillsyn.meddelanden import Meddelande
 from geo_tillsyn.meddelanden import Meddelande as M
 from geo_tillsyn.meddelanden import till_json
 from geo_tillsyn import snedbild
+from geo_tillsyn.radar import skanna_zon
+from geo_tillsyn.lovarkiv import dela_fastighetsbeteckning, hamta_arenden_by_fastighet
 from geo_tillsyn.runner import (
+    LOVARKIV_KATALOG,
     analysera_fall1_punkt,
     analysera_fall3_punkt,
     analysera_punkt,
@@ -201,6 +204,37 @@ def analysera_lovavvikelse_vid_punkt(
 
 
 @mcp.tool()
+def hamta_bygglovsarenden_for_fastighet(fastighetsbeteckning: str) -> dict:
+    """Hämta bygglovsärenden för en fastighet i ByggR-kompatibel form (mock).
+
+    Speglar Sokigo/Tekis ArendeExportWS.GetRelateradeArendenByFastighet:
+    beteckningen delas i trakt + registernummer (fBetNr) och svaret bär
+    tjänstens fältnamn (arendeId, dnr, arendetyp, beskrivning, slutDatum,
+    handelseLista→handlingLista→handlingId, objektLista). Källan är i
+    prototypfasen ett SYNTETISKT testarkiv — en framtida koppling till
+    kommunens ByggR byter datakälla, inte gränssnitt. Systemet gör en
+    sammanställning — beslutet fattas av handläggaren.
+
+    Args:
+        fastighetsbeteckning: T.ex. "ALNÖ-USLAND 1:45".
+
+    Returns:
+        Kompakt JSON: trakt, fBetNr, antal, arenden[] (Tekis-fält) och källa.
+    """
+    kalla = {
+        "syntetisk": True,
+        "format": "Sokigo/Tekis ArendeExportWS (GetRelateradeArendenByFastighet)",
+        "anmarkning": M("runner.lovarkiv_syntetiskt"),
+    }
+    try:
+        trakt, nr = dela_fastighetsbeteckning(fastighetsbeteckning)
+    except ValueError as exc:
+        return {"antal": 0, "arenden": [], "fel": str(exc), "kalla": kalla}
+    arenden = hamta_arenden_by_fastighet(LOVARKIV_KATALOG, trakt, nr)
+    return {"trakt": trakt, "fBetNr": nr, "antal": len(arenden), "arenden": arenden, "kalla": kalla}
+
+
+@mcp.tool()
 def hamta_snedbilder_vid_punkt(
     easting: float,
     northing: float,
@@ -249,6 +283,43 @@ def hamta_snedbilder_vid_punkt(
         "viewer_url": oversikt.get("viewer_url"),
         "kalla": oversikt.get("kalla"),
     }
+
+
+@mcp.tool()
+def skanna_strandskyddszon(
+    min_easting: float,
+    min_northing: float,
+    max_easting: float,
+    max_northing: float,
+    max_kandidater: int = 15,
+) -> dict:
+    """Tillsynsradar: skanna en hel zon och rangordna kandidater (Fall 7, upptäckt).
+
+    I stället för en klickad punkt: alla byggnader i rutan korsas med
+    strandskyddszonerna, bedöms tidsmedvetet (gällde strandskyddet när de
+    uppfördes?) och poängsätts enligt en öppen, redovisad modell. Resultatet
+    är en kandidatlista för granskning — inte beslut, inte påståenden om
+    överträdelse. Dispenser kontrolleras inte. Handläggaren beslutar, alltid.
+
+    Args:
+        min_easting: Rutans västra kant i EPSG:3014.
+        min_northing: Rutans södra kant i EPSG:3014.
+        max_easting: Rutans östra kant i EPSG:3014.
+        max_northing: Rutans norra kant i EPSG:3014.
+        max_kandidater: Högsta antal kandidater i svaret (standard 15 — Eneo
+            trunkerar vid 8 kB; trunkering deklareras i svaret).
+
+    Returns:
+        Kompakt JSON: kandidater (rang, byggnad_id, fastighet, centroid, läge,
+        regim vid uppförandet, poäng + grunder), poängmodell, osäkerheter,
+        käll-URL:er. Aldrig geometri utöver centroider.
+    """
+    return skanna_zon(
+        ows_url=SUNDSVALL_OWS,
+        bbox=(min_easting, min_northing, max_easting, max_northing),
+        nu=_nu(),
+        max_kandidater=max_kandidater,
+    )
 
 
 def _json(data: dict, status: int = 200) -> JSONResponse:
@@ -419,12 +490,49 @@ async def api_snedbild_bild(request: Request) -> Response:
     )
 
 
-@mcp.custom_route("/api/health", methods=["GET", "OPTIONS"])
-async def api_health(request: Request) -> Response:
-    """Enkel hälsokontroll: bekräftar att alla fem MCP-verktyg är registrerade."""
+def _parsa_bbox(request: Request) -> tuple[float, float, float, float]:
+    """Läs bbox=minE,minN,maxE,maxN (EPSG:3014) ur query-strängen; ValueError vid fel."""
+    raw = request.query_params.get("bbox")
+    try:
+        delar = [float(v) for v in (raw or "").split(",")]
+        if len(delar) != 4:
+            raise ValueError(f"förväntade 4 tal, fick {len(delar)}")
+    except ValueError as exc:
+        raise ValueError(M("server.bbox_ogiltig", detalj=str(exc))) from exc
+    return delar[0], delar[1], delar[2], delar[3]
+
+
+@mcp.custom_route("/api/radar", methods=["GET", "OPTIONS"])
+async def api_radar(request: Request) -> Response:
+    """REST-motsvarighet till skanna_strandskyddszon (tillsynsradar), för Origo."""
     if request.method == "OPTIONS":
         return _cors_preflight()
-    return _json({"status": "ok", "tools": 5})
+    try:
+        bbox = _parsa_bbox(request)
+    except ValueError as exc:
+        return _json({"fel": _fel(exc)}, status=400)
+    max_raw = request.query_params.get("max_kandidater")
+    try:
+        resultat = skanna_zon(
+            ows_url=SUNDSVALL_OWS,
+            bbox=bbox,
+            nu=_nu(),
+            max_kandidater=int(max_raw) if max_raw else 25,
+        )
+    except ValueError as exc:
+        # För stor zon / ogiltig ruta: ett deklarerat nej, inte ett serverfel.
+        return _json({"fel": _fel(exc)}, status=400)
+    except Exception:
+        return _json({"fel": M("server.internt_fel")}, status=500)
+    return _json(resultat)
+
+
+@mcp.custom_route("/api/health", methods=["GET", "OPTIONS"])
+async def api_health(request: Request) -> Response:
+    """Enkel hälsokontroll: bekräftar hur många MCP-verktyg som är registrerade."""
+    if request.method == "OPTIONS":
+        return _cors_preflight()
+    return _json({"status": "ok", "tools": len(await mcp.list_tools())})
 
 
 def main(argv: list[str] | None = None) -> int:

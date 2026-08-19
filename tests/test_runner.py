@@ -171,3 +171,65 @@ def test_analysera_punkt_bar_komplement_och_forbehall():
     assert "runner.upphavt_strandskydd_konflikt" in koder
     assert "geodata.snapshot_anvant" in koder
     assert "runner.regellager_otillgangligt" not in koder
+
+
+# --- Rättigheter/servitut i Fall 7 (anbudssvar 151260 7d) -------------------------
+
+_RATTIGHET_Y = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature", "id": "rk_rattighet_y.7",
+            "geometry": {"type": "Polygon", "coordinates": [[[15, 5], [25, 5], [25, 25], [15, 25], [15, 5]]]},
+            "properties": {"Typ": "Officialservitut", "AKTBET": "2281-91/12", "RANDAMAL": "VÄG", "FASTIGHET": "ALNÖ-USLAND 1:45"},
+        },
+        {
+            "type": "Feature", "id": "rk_rattighet_y.8",
+            "geometry": {"type": "Polygon", "coordinates": [[[80, 80], [90, 80], [90, 90], [80, 90], [80, 80]]]},
+            "properties": {"Typ": "Ledningsrätt", "AKTBET": "LÅNGT-BORT", "RANDAMAL": "EL"},
+        },
+    ],
+}
+
+
+def _fejk_wfs_med_rattigheter(wfs_url, type_name, bbox=None, max_features=100):
+    if type_name == "Lantmateriet:rk_rattighet_y":
+        return _RATTIGHET_Y
+    if type_name in ("Lantmateriet:rk_rattighet_l", "Lantmateriet:rk_ga_y", "Lantmateriet:rk_ga_l"):
+        return {"type": "FeatureCollection", "features": []}
+    return _fejk_wfs(wfs_url, type_name, bbox, max_features)
+
+
+def test_fall7_rattigheter_som_beror_traffbyggnad_blir_fakta_med_kalla(tmp_path):
+    resultat = kor_fall7(
+        ows_url=OWS, punkt=(15.0, 15.0), radie_m=100.0, ut_katalog=tmp_path,
+        nu="2026-08-19T10:00:00Z", ar=[2023],
+        hamta_wfs=_fejk_wfs_med_rattigheter, hamta_wms=_fejk_wms,
+    )
+    md = resultat.read_text(encoding="utf-8")
+    assert "Byggnad bal_byggnad_yta.10 berör officialservitut 2281-91/12 (VÄG) på ALNÖ-USLAND 1:45." in md
+    assert "Lantmateriet:rk_rattighet_y (WFS)" in md
+    assert "LÅNGT-BORT" not in md  # rör inte byggnaden
+
+
+def test_analysera_punkt_bar_rattigheter_per_traff_och_deklarerar_otillgangliga_lager():
+    from geo_tillsyn.runner import analysera_punkt
+
+    res = analysera_punkt(
+        ows_url=OWS, punkt=(15.0, 15.0), radie_m=100.0,
+        nu="2026-08-19T10:00:00Z", hamta_wfs=_fejk_wfs_med_rattigheter,
+    )
+    (traff,) = res["traffar"]
+    assert traff["rattigheter"] == [
+        {"typ": "Officialservitut", "aktbeteckning": "2281-91/12", "andamal": "VÄG", "lager": "Lantmateriet:rk_rattighet_y"}
+    ]
+    assert any(k["beskrivning"] == "Lantmateriet:rk_rattighet_y (WFS)" for k in res["kallor"])
+
+    # Lagren nere (grund-_fejk_wfs kastar) -> deklarerat, inte tyst, och ingen nyckel 'rattigheter'.
+    trasigt = analysera_punkt(
+        ows_url=OWS, punkt=(15.0, 15.0), radie_m=100.0,
+        nu="2026-08-19T10:00:00Z", hamta_wfs=_fejk_wfs,
+    )
+    assert "rattigheter" not in trasigt["traffar"][0]
+    koder = [getattr(o, "kod", None) for o in trasigt["osakerheter"]]
+    assert koder.count("runner.rattighetslager_otillgangligt") == 4

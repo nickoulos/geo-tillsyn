@@ -121,6 +121,14 @@ def test_alla_koder_renderar_pa_svenska():
         "kalla.lovarkiv_syntetiskt": {"dnr": "SBN 2009-0412"},
         "kalla.skannad_handling": {"dnr": "SBN 2009-0412"},
         "server.parametrar_ogiltiga": {"detalj": "'easting'"},
+        "server.bbox_ogiltig": {"detalj": "förväntade 4 tal, fick 2"},
+        "radar.poang_delvis": {"andel": 0.42},
+        "radar.poang_gallde_vid_uppforande": {"ar": 2014},
+        "radar.poang_fore_strandskydd": {"ar": 1960},
+        "radar.poang_ar_ikrafttradandear": {"ar": 1975},
+        "radar.kallkonflikt_upphavt": {"referens": "521-1234-2019 (2019-05-02)"},
+        "radar.fastighetslager_otillgangligt": {"lager": "X:y"},
+        "radar.zon_for_stor": {"area_km2": 5.2, "max_km2": 4.0},
         "runner.upphavt_strandskydd_konflikt": {
             "byggnad_id": "bal_byggnad_yta.1", "referens": "521-1234-2019 (2019-05-02)"
         },

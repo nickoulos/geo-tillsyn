@@ -88,7 +88,7 @@ function rad(key, value, t, sprak, vardeFalt) {
     + `<span class="gt-rad__varde">${formatVarde(value, t, sprak, vardeFalt)}</span></div>`;
 }
 
-function renderKallor(kallor, t, sprak) {
+export function renderKallor(kallor, t, sprak) {
   if (!Array.isArray(kallor) || kallor.length === 0) return '';
   const items = kallor.map((k) => {
     const beskrivning = escapeHtml(k ? meddelandeText(k.beskrivning, sprak) : '');
@@ -102,7 +102,7 @@ function renderKallor(kallor, t, sprak) {
     + `<ul>${items}</ul></div>`;
 }
 
-function renderOsakerheter(osakerheter, t, sprak) {
+export function renderOsakerheter(osakerheter, t, sprak) {
   if (!Array.isArray(osakerheter) || osakerheter.length === 0) return '';
   const items = osakerheter
     .map((o) => `<li>${escapeHtml(meddelandeText(o, sprak))}</li>`).join('');
@@ -150,7 +150,9 @@ export function renderCheckBody(data, t, sprak) {
     data.traffar.forEach((traff, idx) => {
       const rader = Object.keys(traff)
         .filter((key) => key !== 'byggnad_id')
-        .map((key) => rad(key, traff[key], t, sprak, key === 'laege' ? 'laege' : undefined))
+        .map((key) => (key === 'rattigheter'
+          ? renderRattigheter(traff[key], t, sprak)
+          : rad(key, traff[key], t, sprak, key === 'laege' ? 'laege' : undefined)))
         .join('');
       fakta.push(`<div class="gt-traff">#${idx + 1} ${escapeHtml(faltLabel('byggnad_id', sprak))}: `
         + `${escapeHtml(String(traff.byggnad_id))}</div>${rader}`);

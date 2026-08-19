@@ -43,10 +43,17 @@ CRS = "EPSG:3014"
 # Lager som tjänar på en hel-lager-ögonblicksbild: få, stora polygoner som
 # bbox-filtret ändå inte kan klippa. Utvidgat/upphävt ingår så att Fall 7 kan
 # visa dem även när Länsstyrelsens lager ligger nere (juli 2026-incidenten).
+# Rättigheter/gemensamhetsanläggningar (Lantmäteriet via kommunen, 7d) tas med
+# av samma skäl: ~12 000 objekt, ~29 MB totalt — billigt lokalt, och lagren är
+# nya i underlaget (aug 2026) så ingen driftshistorik finns att luta sig mot.
 SNAPSHOT_LAGER: tuple[str, ...] = (
     "SundsvallsKommun:lm_strandskydd_y",
     "Lansstyrelsen:UtvidgatStrandskydd_yta",
     "Lansstyrelsen:UpphavdaStrandskydd_yta",
+    "Lantmateriet:rk_rattighet_y",
+    "Lantmateriet:rk_rattighet_l",
+    "Lantmateriet:rk_ga_y",
+    "Lantmateriet:rk_ga_l",
 )
 
 _ROT = Path(__file__).resolve().parents[2]
