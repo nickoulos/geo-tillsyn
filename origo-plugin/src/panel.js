@@ -116,7 +116,7 @@ export function skapaPanel({ t, onSprak, onKollaps, onRetry, onRadar, onRadarVal
     const n = Math.round(coords[1]);
     return `<div class="gt-fastighet__punkt">`
       + `<span class="gt-fastighet__punkt-etikett">${escapeHtml(texts.granskadPunkt)}</span>`
-      + ` · E ${e} · N ${n}</div>`;
+      + ` · E ${e} · N ${n} (SWEREF 99 TM)</div>`;
   }
 
   function beslutBlock() {

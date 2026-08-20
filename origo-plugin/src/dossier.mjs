@@ -196,8 +196,17 @@ export function underlagsLage(checkKey, data, status) {
     return (Array.isArray(data.matningskritiska) && data.matningskritiska.length > 0) ? 'osakert' : 'finns';
   }
   if (checkKey === 'strandskydd') {
+    const traffar = Array.isArray(data.traffar) ? data.traffar : [];
+    if (data.vald_byggnad_id != null && traffar.length > 0
+        && !traffar.some((tr) => tr.byggnad_id === data.vald_byggnad_id)) {
+      // Vald byggnad är inte en träff, men "Utanför zon" är själv en
+      // komponerad rubrik — underlag finns, det säger bara nej.
+      return 'finns';
+    }
     const traff = valdTraff(data);
-    if (!traff) return 'finns';
+    // Ingen träff alls att komponera från (samma svar som ger composeHeadline
+    // "Se underlag") — inget underlag, inte "finns".
+    if (!traff) return 'inget';
     const osakert = (Array.isArray(traff.atgarder) && traff.atgarder.length > 0) || traff.byggnads_ar == null;
     return osakert ? 'osakert' : 'finns';
   }

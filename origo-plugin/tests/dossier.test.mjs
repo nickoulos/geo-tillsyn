@@ -80,13 +80,13 @@ test('composeHeadline strandskydd: vald_byggnad_id null faller tillbaka på traf
   assert.equal(composeHeadline('strandskydd', data, t, 'sv').tal, 'Delvis inom strandskydd');
 });
 
-test('composeHeadline strandskydd: vald byggnad finns men är inte en träff -> Utanför strandskydd', () => {
+test('composeHeadline strandskydd: vald byggnad finns men är inte en träff -> Utanför zon', () => {
   const data = {
     vald_byggnad_id: 'BAL-9', antal_traffar: 1, antal_byggnader: 3,
     traffar: [{ byggnad_id: 'BAL-1', laege: 'inom' }]
   };
   assert.deepEqual(composeHeadline('strandskydd', data, t, 'sv'),
-    { tal: 'Utanför strandskydd', under: '', badge: null });
+    { tal: 'Utanför zon', under: '', badge: null });
 });
 
 test('composeHeadline strandskydd: dispens krävs idag läggs till i underraden', () => {
@@ -139,6 +139,19 @@ test('underlagsLage strandskydd: vald träffens atgarder eller saknad datering -
   assert.equal(underlagsLage('strandskydd', utanDatering, null), 'osakert');
   const klart = { vald_byggnad_id: 'BAL-1', traffar: [{ byggnad_id: 'BAL-1', byggnads_ar: 2014, atgarder: [] }] };
   assert.equal(underlagsLage('strandskydd', klart, null), 'finns');
+});
+
+test('underlagsLage strandskydd: ingen träff alls att komponera från -> inget (inte "finns")', () => {
+  // Samma data som ger composeHeadline "Se underlag" — chippen får inte
+  // överdriva underlaget till 'finns' när det inte finns någon träff.
+  assert.equal(underlagsLage('strandskydd', { vald_byggnad_id: null, traffar: [] }, null), 'inget');
+  assert.equal(underlagsLage('strandskydd', { vald_byggnad_id: 'BAL-9', traffar: [] }, null), 'inget');
+  assert.equal(underlagsLage('strandskydd', {}, null), 'inget');
+});
+
+test('underlagsLage strandskydd: vald byggnad inte en träff men traffar icke-tom -> finns ("Utanför zon" är komponerad)', () => {
+  const data = { vald_byggnad_id: 'BAL-9', traffar: [{ byggnad_id: 'BAL-1', laege: 'inom' }] };
+  assert.equal(underlagsLage('strandskydd', data, null), 'finns');
 });
 
 test('renderCheckBody: Fakta hopfälld, Bedömning öppen, källa klickbar, osäkerhet synlig', () => {
