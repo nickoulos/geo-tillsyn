@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { paddingForFit, fallbackExtent, AUTOZOOM_PADDING_BOTTEN } from '../src/karta-logik.mjs';
+import {
+  paddingForFit, fallbackExtent, AUTOZOOM_PADDING_BOTTEN,
+  minResolutionForFit, AUTOZOOM_MIN_RESOLUTION
+} from '../src/karta-logik.mjs';
 
 test('paddingForFit: panel öppen ger 460 px höger padding (panelbredd + marginal)', () => {
   assert.deepEqual(paddingForFit(true), [40, 460, 336, 40]);
@@ -18,4 +21,9 @@ test('paddingForFit: botten-padding clearar biografi-stripen (296 px) + marginal
 
 test('fallbackExtent: 80 m-ruta centrerad på klickpunkten', () => {
   assert.deepEqual(fallbackExtent([1000, 2000]), [960, 1960, 1040, 2040]);
+});
+
+test('minResolutionForFit: 0.1 m/px — spec §4 "pixelgröt"-spärren mot en liten extent', () => {
+  assert.equal(minResolutionForFit(), 0.1);
+  assert.equal(minResolutionForFit(), AUTOZOOM_MIN_RESOLUTION);
 });

@@ -197,10 +197,11 @@ export function underlagsLage(checkKey, data, status) {
   }
   if (checkKey === 'strandskydd') {
     const traffar = Array.isArray(data.traffar) ? data.traffar : [];
-    if (data.vald_byggnad_id != null && traffar.length > 0
+    if (data.vald_byggnad_id != null
         && !traffar.some((tr) => tr.byggnad_id === data.vald_byggnad_id)) {
-      // Vald byggnad är inte en träff, men "Utanför zon" är själv en
-      // komponerad rubrik — underlag finns, det säger bara nej.
+      // Vald byggnad finns men berör ingen av zonens träffar (traffar kan
+      // vara tom eller icke-tom här — headlineStrandskydd komponerar
+      // "Utanför zon" oavsett) — underlag finns, det säger bara nej.
       return 'finns';
     }
     const traff = valdTraff(data);

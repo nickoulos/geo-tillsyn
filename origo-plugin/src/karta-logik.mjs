@@ -15,6 +15,20 @@ export const AUTOZOOM_PADDING_BOTTEN = 336;
 export const AUTOZOOM_DURATION = 400;
 // 80 m-fallback runt klickpunkten när ingen overlägggeometri finns att zooma till.
 export const AUTOZOOM_FALLBACK_HALV_SIDA = 40;
+// Spec §4 "pixelgröt"-spärren: auto-zoom får aldrig gå finare än 0.1 m/px —
+// en liten overlägg-extent (t.ex. en smal remsa) ska inte tvinga fram en
+// upplösning där kartlagren blir olästbar pixelgröt.
+export const AUTOZOOM_MIN_RESOLUTION = 0.1;
+
+/**
+ * `minResolution` för `map.getView().fit()` — se AUTOZOOM_MIN_RESOLUTION.
+ * Egen funktion (istället för en hårdkodad literal i geotillsyn.js) så att
+ * spärren är testbar utan Origo/OL-mock.
+ * @returns {number}
+ */
+export function minResolutionForFit() {
+  return AUTOZOOM_MIN_RESOLUTION;
+}
 
 /**
  * Padding för `map.getView().fit()` — höger sida beror på om panelen är

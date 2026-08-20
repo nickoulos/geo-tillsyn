@@ -141,17 +141,23 @@ test('underlagsLage strandskydd: vald träffens atgarder eller saknad datering -
   assert.equal(underlagsLage('strandskydd', klart, null), 'finns');
 });
 
-test('underlagsLage strandskydd: ingen träff alls att komponera från -> inget (inte "finns")', () => {
+test('underlagsLage strandskydd: ingen träff alls och ingen vald byggnad -> inget (inte "finns")', () => {
   // Samma data som ger composeHeadline "Se underlag" — chippen får inte
-  // överdriva underlaget till 'finns' när det inte finns någon träff.
+  // överdriva underlaget till 'finns' när det inte finns någon träff och
+  // ingen byggnad är vald (ingen komponerbar rubrik alls).
   assert.equal(underlagsLage('strandskydd', { vald_byggnad_id: null, traffar: [] }, null), 'inget');
-  assert.equal(underlagsLage('strandskydd', { vald_byggnad_id: 'BAL-9', traffar: [] }, null), 'inget');
   assert.equal(underlagsLage('strandskydd', {}, null), 'inget');
 });
 
-test('underlagsLage strandskydd: vald byggnad inte en träff men traffar icke-tom -> finns ("Utanför zon" är komponerad)', () => {
-  const data = { vald_byggnad_id: 'BAL-9', traffar: [{ byggnad_id: 'BAL-1', laege: 'inom' }] };
-  assert.equal(underlagsLage('strandskydd', data, null), 'finns');
+test('underlagsLage strandskydd: vald byggnad inte en träff -> finns ("Utanför zon" är komponerad oavsett tom eller icke-tom traffar)', () => {
+  const medTraffar = { vald_byggnad_id: 'BAL-9', traffar: [{ byggnad_id: 'BAL-1', laege: 'inom' }] };
+  assert.equal(underlagsLage('strandskydd', medTraffar, null), 'finns');
+  // headlineStrandskydd komponerar "Utanför zon" även när traffar är tom
+  // (composeHeadline kräver bara att data.traffar är en array) — chippen
+  // måste stämma med den rubriken, inte säga "Inget underlag".
+  const utanTraffar = { vald_byggnad_id: 'BAL-9', traffar: [] };
+  assert.equal(underlagsLage('strandskydd', utanTraffar, null), 'finns');
+  assert.equal(composeHeadline('strandskydd', utanTraffar, t, 'sv').tal, 'Utanför zon');
 });
 
 test('renderCheckBody: Fakta hopfälld, Bedömning öppen, källa klickbar, osäkerhet synlig', () => {

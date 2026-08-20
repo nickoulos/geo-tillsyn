@@ -110,9 +110,19 @@ export function klockor(olovligt, strandskyddTraff, regler) {
   const tioar = regler.preskription.pbl_tioarsregel;
   const femar = regler.preskription.byggsanktionsavgift;
 
+  // sanktionsavgift_mojlig har omvänd polaritet mot rattelse_preskriberad:
+  // true betyder att avgiften fortfarande KAN tas ut (klockan löper), inte att
+  // fönstret är förbrukat (backend: src/geo_tillsyn/juridik.py ~187-193). Den
+  // delade render-mappningen i biografi.js (status===true -> "utgången",
+  // status===false -> "löper till") förutsätter "true = utgången/preskriberad"
+  // polaritet, så vi normaliserar här — samma semantik backend uttrycker,
+  // bara omvänd till samma tecken som rattelse_preskriberad. null -> null.
+  const sanktionStatus = olovligt.sanktionsavgift_mojlig == null
+    ? null : !olovligt.sanktionsavgift_mojlig;
+
   const resultat = [
     klocka('rattelse', startSaker, startOsaker, tioar.ar, tioar.lagrum, false, olovligt.rattelse_preskriberad),
-    klocka('sanktion', startSaker, startOsaker, femar.ar, femar.lagrum, false, olovligt.sanktionsavgift_mojlig)
+    klocka('sanktion', startSaker, startOsaker, femar.ar, femar.lagrum, false, sanktionStatus)
   ];
 
   if (strandskyddTraff && strandskyddTraff.laege !== 'utanfor') {

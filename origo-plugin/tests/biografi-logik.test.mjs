@@ -152,12 +152,48 @@ test('klockor: rättelse + sanktion utan strandskydd', () => {
     slutSaker: 2017, slutOsaker: 2011, oandlig: false,
     ar: 10, lagrum: 'PBL 11 kap. 20 § 2 st', status: true
   });
+  // sanktionsavgift_mojlig: false betyder att femårsfönstret är förbrukat
+  // (utgången) — omvänd polaritet mot rattelse_preskriberad, normaliserad i
+  // klockor() till samma "true = utgången"-tecken. Se dedikerade
+  // polaritetstester nedan.
   const sanktion = k.find((x) => x.nyckel === 'sanktion');
   assert.deepEqual(sanktion, {
     nyckel: 'sanktion', startSaker: 2007, startOsaker: 2001,
     slutSaker: 2012, slutOsaker: 2006, oandlig: false,
-    ar: 5, lagrum: 'PBL 11 kap. 58 §', status: false
+    ar: 5, lagrum: 'PBL 11 kap. 58 §', status: true
   });
+});
+
+/* ---------- klockor: sanktionsklockans polaritet ----------
+ * sanktionsavgift_mojlig är omvänt mot rattelse_preskriberad: true betyder
+ * att avgiften fortfarande KAN tas ut (klockan löper), false att fönstret är
+ * förbrukat (utgången). klockor() normaliserar sanktion-status till samma
+ * "true = utgången" tecken som rattelse, så den delade render-mappningen i
+ * biografi.js (status===true -> "utgången", status===false -> "löper till")
+ * ger rätt etikett för båda klockorna. */
+
+test('klockor: polaritet — rattelse_preskriberad true -> status true (utgången)', () => {
+  const olovligt = { forsta_ar_med: 2007, rattelse_preskriberad: true, sanktionsavgift_mojlig: null };
+  const k = klockor(olovligt, null, REGLER);
+  assert.equal(k.find((x) => x.nyckel === 'rattelse').status, true);
+});
+
+test('klockor: polaritet — sanktionsavgift_mojlig false -> status true (utgången)', () => {
+  const olovligt = { forsta_ar_med: 2007, rattelse_preskriberad: null, sanktionsavgift_mojlig: false };
+  const k = klockor(olovligt, null, REGLER);
+  assert.equal(k.find((x) => x.nyckel === 'sanktion').status, true);
+});
+
+test('klockor: polaritet — sanktionsavgift_mojlig true -> status false (löper)', () => {
+  const olovligt = { forsta_ar_med: 2007, rattelse_preskriberad: null, sanktionsavgift_mojlig: true };
+  const k = klockor(olovligt, null, REGLER);
+  assert.equal(k.find((x) => x.nyckel === 'sanktion').status, false);
+});
+
+test('klockor: polaritet — sanktionsavgift_mojlig null -> status null (bevaras)', () => {
+  const olovligt = { forsta_ar_med: 2007, rattelse_preskriberad: null, sanktionsavgift_mojlig: null };
+  const k = klockor(olovligt, null, REGLER);
+  assert.equal(k.find((x) => x.nyckel === 'sanktion').status, null);
 });
 
 test('klockor: status null (backend har inte beräknat) bevaras som null', () => {

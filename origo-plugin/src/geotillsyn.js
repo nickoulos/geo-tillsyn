@@ -6,7 +6,7 @@ import { renderRadarLista, renderRadarRubrik, bboxFranExtent } from './radar.mjs
 import { injectStyles } from './styles.mjs';
 import { skapaPanel } from './panel.js';
 import { skapaBiografi } from './biografi.js';
-import { paddingForFit, fallbackExtent, AUTOZOOM_DURATION } from './karta-logik.mjs';
+import { paddingForFit, fallbackExtent, AUTOZOOM_DURATION, minResolutionForFit } from './karta-logik.mjs';
 
 /**
  * Geo-Tillsyn Origo plugin.
@@ -292,7 +292,8 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     harAutozoomatFörKlick = true;
     map.getView().fit(extent, {
       padding: paddingForFit(!kollapsad),
-      duration: AUTOZOOM_DURATION
+      duration: AUTOZOOM_DURATION,
+      minResolution: minResolutionForFit()
     });
   }
 
@@ -461,10 +462,14 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
   }
 
   // Träffen i /api/strandskydd som gäller den klickade byggnaden — den enda
-  // träff biografins Klockor-spår får rita en strandskyddsklocka för.
+  // träff biografins Klockor-spår får rita en strandskyddsklocka för. Samma
+  // fallback som dossier.mjs valdTraff: vald_byggnad_id null (t.ex. äldre
+  // svar) faller tillbaka på första träffen, annars kortets rubrik och
+  // biografi-stripen skulle kunna visa olika träffar för samma data.
   function valdStrandskyddTraff() {
     const ss = senasteData.strandskydd;
-    if (!ss || !ss.traffar || ss.vald_byggnad_id == null) return null;
+    if (!ss || !Array.isArray(ss.traffar)) return null;
+    if (ss.vald_byggnad_id == null) return ss.traffar[0] || null;
     return ss.traffar.find((traff) => traff.byggnad_id === ss.vald_byggnad_id) || null;
   }
 
