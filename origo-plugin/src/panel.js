@@ -17,7 +17,15 @@ const IKONER = {
   vag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M5 7l7-4 7 4"/><path d="M3 12h4l2 5 2-9 2 7 2-3h6"/></svg>',
   pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>',
   snedbild: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l4-4h10l4 4v13H3z"/><path d="M3 7h18"/><circle cx="12" cy="14" r="3.5"/></svg>',
-  radar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12l6.5-6.5"/><circle cx="12" cy="12" r="1"/></svg>'
+  radar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12l6.5-6.5"/><circle cx="12" cy="12" r="1"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10" rx="2"/><path d="M7.5 10.5V7a4.5 4.5 0 0 1 9 0v3.5"/><circle cx="12" cy="15" r="1.4" fill="currentColor" stroke="none"/></svg>'
+};
+
+// Underlagsläget styr chippens ton — aldrig ett utfall, bara hur säkert
+// underlaget är. Samma fem lägen som dossier.mjs underlagsLage().
+const UNDERLAG_TEXTNYCKEL = {
+  finns: 'underlagFinns', osakert: 'underlagOsakert', inget: 'underlagInget',
+  hamtar: 'underlagHamtar', fel: 'underlagFel'
 };
 
 export function skapaPanel({ t, onSprak, onKollaps, onRetry, onRadar, onRadarVal, onRadarTillbaka }) {
@@ -99,14 +107,44 @@ export function skapaPanel({ t, onSprak, onKollaps, onRetry, onRadar, onRadarVal
     if (knapp) knapp.addEventListener('click', () => onRadarTillbaka && onRadarTillbaka());
   }
 
-  function startaAnalys() {
+  // `coords` = [E, N] i kartans egen projektion (SWEREF 99 TM / EPSG:3006) —
+  // klickpunkten rakt av, ingen transform. Visas bara som referens; alla
+  // API-anrop går fortfarande i EPSG:3014 (se geotillsyn.js).
+  function granskadPunktRad(coords) {
+    if (!Array.isArray(coords) || coords.length < 2) return '';
+    const e = Math.round(coords[0]);
+    const n = Math.round(coords[1]);
+    return `<div class="gt-fastighet__punkt">`
+      + `<span class="gt-fastighet__punkt-etikett">${escapeHtml(texts.granskadPunkt)}</span>`
+      + ` · E ${e} · N ${n}</div>`;
+  }
+
+  function beslutBlock() {
+    return `<section class="gt-beslut">
+      <div class="gt-kort__huvud">
+        <span class="gt-kort__ikon">${IKONER.lock}</span>
+        <div><h3>${escapeHtml(texts.beslutRubrik)}</h3></div>
+      </div>
+      <div class="gt-beslut__falt">${escapeHtml(texts.beslutTomt)}</div>
+      <div class="gt-beslut__under">${escapeHtml(texts.beslutUnder)}</div>
+    </section>`;
+  }
+
+  /**
+   * @param {number[]} [coords] Klickpunkten i kartans egen projektion
+   *   (SWEREF 99 TM), för den granskade-punkt-raden i fastighetsrubriken.
+   */
+  function startaAnalys(coords) {
     kropp().innerHTML = `
       ${radarTillbakaRad()}
       <div class="gt-fastighet">
         <span class="gt-fastighet__etikett">${escapeHtml(texts.fastighet)}</span>
         <div class="gt-fastighet__namn"><span class="gt-skelett" style="width:9rem"></span></div>
+        ${granskadPunktRad(coords)}
       </div>
+      <div class="gt-sammanfattning"></div>
       ${CHECK_KEYS.map(kortSkal).join('')}
+      ${beslutBlock()}
       <section class="gt-snedbild" hidden>
         <div class="gt-kort__huvud">
           <span class="gt-kort__ikon">${IKONER.snedbild}</span>
@@ -247,14 +285,87 @@ export function skapaPanel({ t, onSprak, onKollaps, onRetry, onRadar, onRadarVal
     }
   }
 
-  function setCardResult(key, { headline, body }) {
+  /**
+   * @param {{tal: string, under: string, badge: (string|null)}} headline
+   *   Display-rubriken från dossier.mjs composeHeadline: stort tal, en
+   *   underrad komponerad enbart av fält backend skickat, och en valfri
+   *   neutral badge.
+   * @param {number} [osakerheter] Antal osäkerheter i kortets body — styr om
+   *   en "N osäkerheter"-chip visas som fäller upp/ner den redan renderade
+   *   `.gt-osakerhet[hidden]`-blocket (renderCheckBody döljer den som default).
+   */
+  function setCardResult(key, { headline, body, osakerheter }) {
     const k = kort(key);
     if (!k) return;
+    const h = headline || {};
+    const badgeHtml = h.badge ? `<span class="gt-kort__badge">${escapeHtml(h.badge)}</span>` : '';
+    const underHtml = h.under ? `<div class="gt-kort__underrad">${escapeHtml(h.under)}</div>` : '';
+    const n = osakerheter || 0;
+    const chipHtml = n > 0
+      ? `<button type="button" class="gt-osakerhet-chip" aria-expanded="false">${escapeHtml(texts.osakerheterChip(n))}</button>`
+      : '';
     k.querySelector('.gt-kort__status').innerHTML =
-      `<div class="gt-rubrikrad">${escapeHtml(headline)}</div>`;
+      `<div class="gt-kort__tal">${escapeHtml(h.tal)}${badgeHtml}</div>${underHtml}${chipHtml}`;
     const inneh = k.querySelector('.gt-kort__innehall');
     inneh.innerHTML = body;
     inneh.hidden = false;
+    const chip = k.querySelector('.gt-osakerhet-chip');
+    if (chip) {
+      chip.addEventListener('click', () => {
+        const block = inneh.querySelector('.gt-osakerhet');
+        if (!block) return;
+        block.hidden = !block.hidden;
+        chip.setAttribute('aria-expanded', String(!block.hidden));
+      });
+    }
+  }
+
+  /**
+   * Sammanfattningsraden: en chip per kontroll med kontrollens namn och dess
+   * underlagsläge (aldrig ett utfall). Klick scrollar till kortet.
+   * @param {Object<string,string>} [lagen] key -> underlagsLage()-resultat.
+   */
+  function setSammanfattning(lagen) {
+    const container = kropp().querySelector('.gt-sammanfattning');
+    if (!container) return;
+    if (!lagen) { container.innerHTML = ''; return; }
+    container.innerHTML = CHECK_KEYS.map((key) => {
+      const lage = lagen[key];
+      if (!lage) return '';
+      const textnyckel = UNDERLAG_TEXTNYCKEL[lage] || 'underlagInget';
+      return `<button type="button" class="gt-chip gt-chip--${escapeHtml(lage)}" data-check="${key}">
+        <span class="gt-chip__namn">${escapeHtml(texts.checkTitel[key])}</span>
+        <span class="gt-chip__lage">${escapeHtml(texts[textnyckel])}</span>
+      </button>`;
+    }).join('');
+    container.querySelectorAll('.gt-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const target = kort(chip.dataset.check);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  }
+
+  /**
+   * Kandidatraden under strandskyddskortets rubrik: "N andra byggnader inom
+   * 150 m berör zonen" + knappen "Visa kandidater i kartan". antalAndra<=0
+   * döljer raden (inga andra kandidater att visa).
+   * @param {number} antalAndra
+   * @param {(() => void)|null} onVisa
+   */
+  function setStrandskyddKandidater(antalAndra, onVisa) {
+    const k = kort('strandskydd');
+    if (!k) return;
+    const status = k.querySelector('.gt-kort__status');
+    let rad = status.querySelector('.gt-kort__kandidatrad');
+    if (rad) rad.remove();
+    if (!antalAndra || antalAndra <= 0) return;
+    rad = document.createElement('div');
+    rad.className = 'gt-kort__kandidatrad';
+    rad.innerHTML = `<span>${escapeHtml(texts.andraByggnader(antalAndra))}</span>`
+      + `<button type="button" class="gt-knapp gt-kort__visakandidater">${escapeHtml(texts.visaKandidater)}</button>`;
+    status.appendChild(rad);
+    rad.querySelector('button').addEventListener('click', () => onVisa && onVisa());
   }
 
   function setCardInfo(key, text) {
@@ -307,6 +418,14 @@ export function skapaPanel({ t, onSprak, onKollaps, onRetry, onRadar, onRadarVal
     if (kropp().querySelector('.gt-tom')) visaTomlage();
     const fastEtikett = kropp().querySelector('.gt-fastighet__etikett');
     if (fastEtikett) fastEtikett.textContent = texts.fastighet;
+    const punktEtikett = kropp().querySelector('.gt-fastighet__punkt-etikett');
+    if (punktEtikett) punktEtikett.textContent = texts.granskadPunkt;
+    const beslut = kropp().querySelector('.gt-beslut');
+    if (beslut) {
+      beslut.querySelector('h3').textContent = texts.beslutRubrik;
+      beslut.querySelector('.gt-beslut__falt').textContent = texts.beslutTomt;
+      beslut.querySelector('.gt-beslut__under').textContent = texts.beslutUnder;
+    }
     const sned = snedbildEl();
     if (sned) {
       sned.querySelector('h3').textContent = texts.snedbildRubrik;
@@ -329,6 +448,7 @@ export function skapaPanel({ t, onSprak, onKollaps, onRetry, onRadar, onRadarVal
   visaTomlage();
   return { el, tabEl, setCollapsed, visaTomlage, startaAnalys, setFastighet,
     setCardLoading, setCardResult, setCardInfo, setCardError, uppdateraTexter,
+    setSammanfattning, setStrandskyddKandidater,
     setSnedbilderLoading, setSnedbilderInfo, setSnedbilder,
     setRadarLoading, setRadarResult, setRadarInfo, setRadarError };
 }

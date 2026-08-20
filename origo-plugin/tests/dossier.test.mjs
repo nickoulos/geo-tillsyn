@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { TEXTS } from '../src/i18n.mjs';
-import { escapeHtml, formatVarde, composeHeadline, renderCheckBody } from '../src/dossier.mjs';
+import {
+  escapeHtml, formatVarde, composeHeadline, underlagsLage, renderCheckBody
+} from '../src/dossier.mjs';
 
 const t = TEXTS.sv;
 
@@ -26,31 +28,117 @@ test('formatVarde: boolean blir badge, null blir Ej fastställt', () => {
   assert.equal(formatVarde(null, t), t.ejFaststallt);
 });
 
-test('composeHeadline lovavvikelse: fakta-rubrik med tecken och dnr', () => {
-  assert.equal(composeHeadline('lovavvikelse', FALL3, t, 'sv'),
-    '+90,3 m² (+38,4 %) mot godkänt lov · BYGG 2009-0417');
+test('composeHeadline lovavvikelse: display-tal + underrad med tecken och dnr', () => {
+  assert.deepEqual(composeHeadline('lovavvikelse', FALL3, t, 'sv'), {
+    tal: '+90,3 m²', under: '+38,4 % mot godkänt lov · BYGG 2009-0417', badge: null
+  });
 });
 
-test('composeHeadline olovligt: intervall + register, aldrig skuld-ord', () => {
-  const data = { sista_ar_utan: 1998, forsta_ar_med: 2001, bal_nybyggnadsar: 1999 };
-  assert.equal(composeHeadline('olovligt', data, t, 'sv'),
-    'Uppförd 1998–2001 enligt ortofoto · nybyggnadsår 1999 i registret');
+test('composeHeadline olovligt: intervall, aldrig skuld-ord, badge endast vid bal_forenligt===false', () => {
+  const data = { sista_ar_utan: 2002, forsta_ar_med: 2007, bal_nybyggnadsar: 2014, bal_forenligt: false };
+  assert.deepEqual(composeHeadline('olovligt', data, t, 'sv'), {
+    tal: '2002 → 2007', under: 'först synlig i ortofoto · registret säger 2014', badge: 'avviker'
+  });
+  // Ingen bal_forenligt-uppgift alls -> ingen badge (aldrig gissa ett skuld-ord).
+  const utanForenlighet = { sista_ar_utan: 1998, forsta_ar_med: 2001 };
+  assert.equal(composeHeadline('olovligt', utanForenlighet, t, 'sv').badge, null);
+  // bal_forenligt === true -> fortfarande ingen badge.
+  const forenlig = { ...data, bal_forenligt: true };
+  assert.equal(composeHeadline('olovligt', forenlig, t, 'sv').badge, null);
 });
 
-test('composeHeadline strandskydd: träffar av totalt', () => {
-  const data = { antal_traffar: 2, antal_byggnader: 5 };
-  assert.equal(composeHeadline('strandskydd', data, t, 'sv'),
-    '2 av 5 byggnader berör strandskyddszon');
+test('composeHeadline olovligt: sista_ar_utan null ger pilform utan undre gräns', () => {
+  const data = { sista_ar_utan: null, forsta_ar_med: 2007 };
+  assert.deepEqual(composeHeadline('olovligt', data, t, 'sv'), {
+    tal: '→ 2007', under: 'först synlig i ortofoto', badge: null
+  });
+});
+
+test('composeHeadline olovligt: forsta_ar_med saknas -> Se underlag (ingen komponerbar tal)', () => {
+  assert.deepEqual(composeHeadline('olovligt', { sista_ar_utan: 1998 }, t, 'sv'),
+    { tal: t.seUnderlag, under: '', badge: null });
+});
+
+test('composeHeadline strandskydd: väljer träffen som matchar vald_byggnad_id', () => {
+  const data = {
+    vald_byggnad_id: 'BAL-2', antal_traffar: 2, antal_byggnader: 5,
+    traffar: [
+      { byggnad_id: 'BAL-1', laege: 'delvis' },
+      { byggnad_id: 'BAL-2', laege: 'inom', zon_referenser: ['2281K-ÖVR-241'], byggnads_ar: 2014, preskriberas: false }
+    ]
+  };
+  assert.deepEqual(composeHeadline('strandskydd', data, t, 'sv'), {
+    tal: 'Inom strandskydd', under: 'zon 2281K-ÖVR-241 · uppförd 2014 · ingen preskription', badge: null
+  });
+});
+
+test('composeHeadline strandskydd: vald_byggnad_id null faller tillbaka på traffar[0]', () => {
+  const data = {
+    vald_byggnad_id: null, antal_traffar: 1, antal_byggnader: 3,
+    traffar: [{ byggnad_id: 'BAL-9', laege: 'delvis' }]
+  };
+  assert.equal(composeHeadline('strandskydd', data, t, 'sv').tal, 'Delvis inom strandskydd');
+});
+
+test('composeHeadline strandskydd: vald byggnad finns men är inte en träff -> Utanför strandskydd', () => {
+  const data = {
+    vald_byggnad_id: 'BAL-9', antal_traffar: 1, antal_byggnader: 3,
+    traffar: [{ byggnad_id: 'BAL-1', laege: 'inom' }]
+  };
+  assert.deepEqual(composeHeadline('strandskydd', data, t, 'sv'),
+    { tal: 'Utanför strandskydd', under: '', badge: null });
+});
+
+test('composeHeadline strandskydd: dispens krävs idag läggs till i underraden', () => {
+  const data = {
+    vald_byggnad_id: 'BAL-1', traffar: [
+      { byggnad_id: 'BAL-1', laege: 'inom', dispens_kravs_idag: true }
+    ]
+  };
+  assert.equal(composeHeadline('strandskydd', data, t, 'sv').under, 'dispens krävs idag');
 });
 
 test('composeHeadline: saknade fält ger Se underlag — aldrig ett friande påstående', () => {
-  assert.equal(composeHeadline('olovligt', {}, t, 'sv'), t.seUnderlag);
-  assert.equal(composeHeadline('lovavvikelse', { lov_hittat: true }, t, 'sv'), t.seUnderlag);
+  assert.deepEqual(composeHeadline('olovligt', {}, t, 'sv'), { tal: t.seUnderlag, under: '', badge: null });
+  assert.deepEqual(composeHeadline('lovavvikelse', { lov_hittat: true }, t, 'sv'),
+    { tal: t.seUnderlag, under: '', badge: null });
+  assert.deepEqual(composeHeadline('strandskydd', {}, t, 'sv'), { tal: t.seUnderlag, under: '', badge: null });
 });
 
 test('composeHeadline: backendens meddelande vinner', () => {
-  assert.equal(composeHeadline('lovavvikelse',
-    { lov_hittat: false, meddelande: 'Inget lov i arkivet' }, t, 'sv'), 'Inget lov i arkivet');
+  assert.deepEqual(composeHeadline('lovavvikelse',
+    { lov_hittat: false, meddelande: 'Inget lov i arkivet' }, t, 'sv'),
+  { tal: 'Inget lov i arkivet', under: '', badge: null });
+});
+
+/* --- underlagsLage: underlagsbeskrivning, aldrig ett utfall --- */
+
+test('underlagsLage: status styr fel/inget/hamtar oavsett data', () => {
+  assert.equal(underlagsLage('olovligt', { forsta_ar_med: 2007 }, { typ: 'fel' }), 'fel');
+  assert.equal(underlagsLage('olovligt', null, { typ: 'info' }), 'inget');
+  assert.equal(underlagsLage('olovligt', null, { typ: 'laddar' }), 'hamtar');
+  assert.equal(underlagsLage('olovligt', null, null), 'hamtar');
+});
+
+test('underlagsLage olovligt: matningskritiskt eller saknad datering -> osakert', () => {
+  assert.equal(underlagsLage('olovligt', { forsta_ar_med: 2007, matningskritiskt: true }, null), 'osakert');
+  assert.equal(underlagsLage('olovligt', { forsta_ar_med: null }, null), 'osakert');
+  assert.equal(underlagsLage('olovligt', { forsta_ar_med: 2007 }, null), 'finns');
+});
+
+test('underlagsLage lovavvikelse: icke-tom matningskritiska -> osakert', () => {
+  assert.equal(underlagsLage('lovavvikelse', { matningskritiska: ['a'] }, null), 'osakert');
+  assert.equal(underlagsLage('lovavvikelse', { matningskritiska: [] }, null), 'finns');
+  assert.equal(underlagsLage('lovavvikelse', {}, null), 'finns');
+});
+
+test('underlagsLage strandskydd: vald träffens atgarder eller saknad datering -> osakert', () => {
+  const medAtgard = { vald_byggnad_id: 'BAL-1', traffar: [{ byggnad_id: 'BAL-1', atgarder: ['x'] }] };
+  assert.equal(underlagsLage('strandskydd', medAtgard, null), 'osakert');
+  const utanDatering = { vald_byggnad_id: 'BAL-1', traffar: [{ byggnad_id: 'BAL-1', byggnads_ar: null }] };
+  assert.equal(underlagsLage('strandskydd', utanDatering, null), 'osakert');
+  const klart = { vald_byggnad_id: 'BAL-1', traffar: [{ byggnad_id: 'BAL-1', byggnads_ar: 2014, atgarder: [] }] };
+  assert.equal(underlagsLage('strandskydd', klart, null), 'finns');
 });
 
 test('renderCheckBody: Fakta hopfälld, Bedömning öppen, källa klickbar, osäkerhet synlig', () => {
@@ -95,8 +183,8 @@ test('renderCheckBody: osäkerheter som meddelandekod översätts till valt spr�
 
 test('composeHeadline: meddelande som kod översätts, ren sträng passerar', () => {
   const data = { lov_hittat: false, meddelande: { kod: 'runner.inget_lov_i_arkivet', params: {} } };
-  assert.match(composeHeadline('lovavvikelse', data, TEXTS.en, 'en'), /No case in the \(test\) archive/);
-  assert.match(composeHeadline('lovavvikelse', data, TEXTS.sv, 'sv'), /Inget ärende i \(test\)arkivet/);
+  assert.match(composeHeadline('lovavvikelse', data, TEXTS.en, 'en').tal, /No case in the \(test\) archive/);
+  assert.match(composeHeadline('lovavvikelse', data, TEXTS.sv, 'sv').tal, /Inget ärende i \(test\)arkivet/);
 });
 
 test('renderKallor: kod-beskrivning översätts, författningsnamn står kvar ordagrant', () => {

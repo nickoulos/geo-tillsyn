@@ -102,40 +102,112 @@ export function renderKallor(kallor, t, sprak) {
     + `<ul>${items}</ul></div>`;
 }
 
-export function renderOsakerheter(osakerheter, t, sprak) {
+export function renderOsakerheter(osakerheter, t, sprak, hidden = false) {
   if (!Array.isArray(osakerheter) || osakerheter.length === 0) return '';
   const items = osakerheter
     .map((o) => `<li>${escapeHtml(meddelandeText(o, sprak))}</li>`).join('');
-  return `<div class="gt-osakerhet" role="note" aria-label="${escapeHtml(t.osakerheter)}">`
+  return `<div class="gt-osakerhet"${hidden ? ' hidden' : ''} role="note" aria-label="${escapeHtml(t.osakerheter)}">`
     + `<ul>${items}</ul></div>`;
 }
 
+// Fall 7: träffen som gäller den klickade byggnaden — den enda träffen
+// display-rubriken och osäkerhetsbedömningen får bygga på. `vald_byggnad_id`
+// null betyder "ingen specifik byggnad vald" (t.ex. äldre svar) och faller
+// tillbaka på den första träffen; en satt men obekräftad vald_byggnad_id som
+// inte finns bland träffarna betyder "utanför zon" och ger ingen träff alls.
+function valdTraff(data) {
+  if (!data || !Array.isArray(data.traffar)) return null;
+  if (data.vald_byggnad_id == null) return data.traffar[0] || null;
+  return data.traffar.find((traff) => traff.byggnad_id === data.vald_byggnad_id) || null;
+}
+
+function headlineOlovligt(data, t) {
+  if (data.forsta_ar_med == null) return { tal: t.seUnderlag, under: '', badge: null };
+  const tal = data.sista_ar_utan != null
+    ? `${data.sista_ar_utan} → ${data.forsta_ar_med}`
+    : `→ ${data.forsta_ar_med}`;
+  const underDelar = [t.forstSynligOrtofoto];
+  if (data.bal_nybyggnadsar != null) underDelar.push(t.registretSager(data.bal_nybyggnadsar));
+  const badge = data.bal_forenligt === false ? t.avviker : null;
+  return { tal, under: underDelar.join(' · '), badge };
+}
+
+function headlineLovavvikelse(data, t, sprak) {
+  if (typeof data.area_diff_m2 !== 'number' || typeof data.area_diff_procent !== 'number') {
+    return { tal: t.seUnderlag, under: '', badge: null };
+  }
+  const tal = `${teckenTal(data.area_diff_m2, sprak)} m²`;
+  const underDelar = [`${teckenTal(data.area_diff_procent, sprak)} % ${t.motGodkantLov}`];
+  if (data.dnr) underDelar.push(data.dnr);
+  return { tal, under: underDelar.join(' · '), badge: null };
+}
+
+function headlineStrandskydd(data, t) {
+  if (!data || !Array.isArray(data.traffar)) return { tal: t.seUnderlag, under: '', badge: null };
+  if (data.vald_byggnad_id != null && !data.traffar.some((tr) => tr.byggnad_id === data.vald_byggnad_id)) {
+    // Vald byggnad finns, men berör ingen av zonens träffar.
+    return { tal: t.utanforStrandskydd, under: '', badge: null };
+  }
+  const traff = valdTraff(data);
+  if (!traff) return { tal: t.seUnderlag, under: '', badge: null };
+  const tal = traff.laege === 'inom' ? t.inomStrandskydd : t.delvisInomStrandskydd;
+  const underDelar = [];
+  const zonRef = Array.isArray(traff.zon_referenser) ? traff.zon_referenser[0] : traff.zon_referenser;
+  if (zonRef) underDelar.push(t.zon(zonRef));
+  if (traff.byggnads_ar != null) underDelar.push(t.uppford(traff.byggnads_ar));
+  if (traff.preskriberas === false) underDelar.push(t.ingenPreskriptionKort);
+  if (traff.dispens_kravs_idag === true) underDelar.push(t.dispensKravs);
+  return { tal, under: underDelar.join(' · '), badge: null };
+}
+
+/**
+ * @returns {{tal: string, under: string, badge: (string|null)}} Display-rubriken:
+ *   ett stort tal/uttryck (`tal`), en underrad komponerad enbart av fält
+ *   backend faktiskt skickat (`under`), och en valfri neutral badge (`badge`,
+ *   t.ex. "avviker" — aldrig ett skuld- eller friande omdöme). Saknas
+ *   komponerbara fält: `{tal: t.seUnderlag, under: '', badge: null}`.
+ */
 export function composeHeadline(checkKey, data, t, sprak) {
-  if (data && data.meddelande) return meddelandeText(data.meddelande, sprak);
-  if (!data) return t.seUnderlag;
-  if (checkKey === 'olovligt'
-      && data.sista_ar_utan != null && data.forsta_ar_med != null) {
-    let s = t.rubrikOlovligt(data.sista_ar_utan, data.forsta_ar_med);
-    if (data.bal_nybyggnadsar != null) s += ` · ${t.rubrikOlovligtRegister(data.bal_nybyggnadsar)}`;
-    return s;
+  if (data && data.meddelande) {
+    return { tal: meddelandeText(data.meddelande, sprak), under: '', badge: null };
   }
-  if (checkKey === 'lovavvikelse'
-      && typeof data.area_diff_m2 === 'number' && typeof data.area_diff_procent === 'number') {
-    let s = t.rubrikAvvikelse(teckenTal(data.area_diff_m2, sprak), teckenTal(data.area_diff_procent, sprak));
-    if (data.dnr) s += ` · ${data.dnr}`;
-    return s;
+  if (!data) return { tal: t.seUnderlag, under: '', badge: null };
+  if (checkKey === 'olovligt') return headlineOlovligt(data, t);
+  if (checkKey === 'lovavvikelse') return headlineLovavvikelse(data, t, sprak);
+  if (checkKey === 'strandskydd') return headlineStrandskydd(data, t);
+  return { tal: t.seUnderlag, under: '', badge: null };
+}
+
+/**
+ * Underlagsläge för sammanfattningschipsen — beskriver ALDRIG ett utfall,
+ * bara om/hur säkert underlag finns: 'finns' | 'osakert' | 'inget' | 'hamtar' | 'fel'.
+ * @param {object} [status] `{typ: 'fel'|'info'|'laddar'}` — wiring-lagrets syn
+ *   på kortets läge, samma som driver setCardError/setCardInfo/setCardLoading.
+ */
+export function underlagsLage(checkKey, data, status) {
+  if (status && status.typ === 'fel') return 'fel';
+  if (status && status.typ === 'info') return 'inget';
+  if (status && status.typ === 'laddar') return 'hamtar';
+  if (!data) return 'hamtar';
+  if (checkKey === 'olovligt') {
+    return (data.matningskritiskt || data.forsta_ar_med == null) ? 'osakert' : 'finns';
   }
-  if (checkKey === 'strandskydd'
-      && typeof data.antal_traffar === 'number' && typeof data.antal_byggnader === 'number') {
-    return t.rubrikStrandskydd(data.antal_traffar, data.antal_byggnader);
+  if (checkKey === 'lovavvikelse') {
+    return (Array.isArray(data.matningskritiska) && data.matningskritiska.length > 0) ? 'osakert' : 'finns';
   }
-  return t.seUnderlag;
+  if (checkKey === 'strandskydd') {
+    const traff = valdTraff(data);
+    if (!traff) return 'finns';
+    const osakert = (Array.isArray(traff.atgarder) && traff.atgarder.length > 0) || traff.byggnads_ar == null;
+    return osakert ? 'osakert' : 'finns';
+  }
+  return 'finns';
 }
 
 export function renderCheckBody(data, t, sprak) {
   if (data.meddelande) {
     return `<div class="gt-info">${escapeHtml(meddelandeText(data.meddelande, sprak))}</div>`
-      + renderOsakerheter(data.osakerheter, t, sprak);
+      + renderOsakerheter(data.osakerheter, t, sprak, true);
   }
 
   const fakta = [];
@@ -175,7 +247,7 @@ export function renderCheckBody(data, t, sprak) {
     `<details class="gt-sektion"${oppen ? ' open' : ''}><summary>${escapeHtml(rubrik)}</summary>`
     + `<div class="gt-sektion__inner">${inre || '<div class="gt-info">—</div>'}</div></details>`;
 
-  return renderOsakerheter(data.osakerheter, t, sprak)
+  return renderOsakerheter(data.osakerheter, t, sprak, true)
     + sektion(t.fakta, fakta.join('') + renderKallor(data.kallor, t, sprak), false)
     + sektion(t.bedomning, bedomning.join(''), true);
 }

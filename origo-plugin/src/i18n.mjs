@@ -124,7 +124,34 @@ export const TEXTS = {
     rattighetTyp: {
       'Ledningsrätt': 'Ledningsrätt', 'Officialservitut': 'Officialservitut',
       'Avtalsservitut': 'Avtalsservitut', 'Gemensamhetsanläggning': 'Gemensamhetsanläggning'
-    }
+    },
+    // --- v0.7 Task 2, "fynden först": sammanfattningschips + display-rubriker ---
+    // Namnges skilt från befintliga forstSynlig (funktion, biografins gap-
+    // etikett) och ingenPreskription (sträng med MÖD-referens, samma ställe)
+    // för att inte krocka med deras befintliga signaturer/ordalydelse.
+    underlagFinns: 'Underlag finns',
+    underlagOsakert: 'Osäkert underlag',
+    underlagInget: 'Inget underlag',
+    underlagHamtar: 'Hämtar…',
+    underlagFel: 'Fel',
+    osakerheterChip: (n) => `${n} osäkerheter`,
+    avviker: 'avviker',
+    forstSynligOrtofoto: 'först synlig i ortofoto',
+    registretSager: (ar) => `registret säger ${ar}`,
+    motGodkantLov: 'mot godkänt lov',
+    inomStrandskydd: 'Inom strandskydd',
+    delvisInomStrandskydd: 'Delvis inom strandskydd',
+    utanforStrandskydd: 'Utanför strandskydd',
+    zon: (ref) => `zon ${ref}`,
+    uppford: (ar) => `uppförd ${ar}`,
+    ingenPreskriptionKort: 'ingen preskription',
+    dispensKravs: 'dispens krävs idag',
+    andraByggnader: (n) => `${n} andra byggnader inom 150 m berör zonen`,
+    visaKandidater: 'Visa kandidater i kartan',
+    beslutRubrik: 'Beslut',
+    beslutTomt: '— fylls inte i av verktyget —',
+    beslutUnder: 'Dossiern har inget beslutsfält: bedömningen är handläggarens.',
+    granskadPunkt: 'Granskad punkt'
   },
   en: {
     appNamn: 'Geo-Tillsyn',
@@ -234,7 +261,30 @@ export const TEXTS = {
     rattighetTyp: {
       'Ledningsrätt': 'Utility easement (ledningsrätt)', 'Officialservitut': 'Official easement (officialservitut)',
       'Avtalsservitut': 'Contractual easement (avtalsservitut)', 'Gemensamhetsanläggning': 'Joint facility (gemensamhetsanläggning)'
-    }
+    },
+    underlagFinns: 'Evidence available',
+    underlagOsakert: 'Uncertain evidence',
+    underlagInget: 'No evidence',
+    underlagHamtar: 'Fetching…',
+    underlagFel: 'Error',
+    osakerheterChip: (n) => `${n} uncertainties`,
+    avviker: 'differs',
+    forstSynligOrtofoto: 'first visible in orthophoto',
+    registretSager: (ar) => `register says ${ar}`,
+    motGodkantLov: 'vs approved permit',
+    inomStrandskydd: 'Within shoreline protection',
+    delvisInomStrandskydd: 'Partly within shoreline protection',
+    utanforStrandskydd: 'Outside shoreline protection',
+    zon: (ref) => `zone ${ref}`,
+    uppford: (ar) => `erected ${ar}`,
+    ingenPreskriptionKort: 'no limitation period',
+    dispensKravs: 'exemption required today',
+    andraByggnader: (n) => `${n} other buildings within 150 m touch the zone`,
+    visaKandidater: 'Show candidates on the map',
+    beslutRubrik: 'Decision',
+    beslutTomt: '— not filled in by the tool —',
+    beslutUnder: "The dossier has no decision field: the assessment is the caseworker's.",
+    granskadPunkt: 'Inspected point'
   }
 };
 

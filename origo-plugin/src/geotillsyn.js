@@ -1,6 +1,6 @@
 import Origo from 'Origo';
 import { TEXTS, meddelandeText } from './i18n.mjs';
-import { composeHeadline, renderCheckBody, escapeHtml } from './dossier.mjs';
+import { composeHeadline, underlagsLage, renderCheckBody, escapeHtml } from './dossier.mjs';
 import { renderKontextDetalj } from './regelverk.mjs';
 import { renderRadarLista, renderRadarRubrik, bboxFranExtent } from './radar.mjs';
 import { injectStyles } from './styles.mjs';
@@ -113,6 +113,9 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
   // ren text) så att språkväxlingen kan rendera om även dem — ett 404-svar är
   // lika mycket innehåll som ett resultat.
   const senasteStatus = {};
+  // Checkar som väntar på svar — underlagsLage() ser detta som 'hamtar' precis
+  // som setCardLoading gör, så sammanfattningschipsen hänger med i realtid.
+  const laddandeChecks = new Set();
   let overlayLayer = null;
   let radarLayer = null;
   let senasteRadar = null;
@@ -331,14 +334,17 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
         : `${t().felHamtning}${status.suffix || ''}`;
       if (status.typ === 'info') panel.setCardInfo(key, text);
       else panel.setCardError(key, text);
+      if (key === 'strandskydd') panel.setStrandskyddKandidater(0, null);
       return;
     }
     const data = senasteData[key];
     if (!data) return;
     panel.setCardResult(key, {
       headline: composeHeadline(key, data, t(), aktivtSprak),
-      body: renderCheckBody(data, t(), aktivtSprak)
+      body: renderCheckBody(data, t(), aktivtSprak),
+      osakerheter: Array.isArray(data.osakerheter) ? data.osakerheter.length : 0
     });
+    if (key === 'strandskydd') renderaStrandskyddKandidater();
   }
 
   // Ett kort kan bara vara i ett läge — sätt status och rendera via renderaKort,
@@ -348,6 +354,7 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     senasteStatus[key] = status;
     renderaKort(key);
     uppdateraBiografiData();
+    renderaSammanfattning();
   }
 
   // Träffen i /api/strandskydd som gäller den klickade byggnaden — den enda
@@ -356,6 +363,31 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     const ss = senasteData.strandskydd;
     if (!ss || !ss.traffar || ss.vald_byggnad_id == null) return null;
     return ss.traffar.find((traff) => traff.byggnad_id === ss.vald_byggnad_id) || null;
+  }
+
+  // Sammanfattningschipsen: ett underlagsläge per kontroll (aldrig ett utfall),
+  // omräknat från samma data/status som kortens egen rendering bygger på.
+  function renderaSammanfattning() {
+    const lagen = {};
+    CHECKS.forEach((c) => {
+      const status = laddandeChecks.has(c.key) ? { typ: 'laddar' } : senasteStatus[c.key];
+      lagen[c.key] = underlagsLage(c.key, senasteData[c.key], status);
+    });
+    panel.setSammanfattning(lagen);
+  }
+
+  // "27 andra byggnader inom 150 m berör zonen" — antal_traffar minus den
+  // valda byggnaden själv, om den var en av träffarna.
+  function renderaStrandskyddKandidater() {
+    const data = senasteData.strandskydd;
+    if (!data) { panel.setStrandskyddKandidater(0, null); return; }
+    const valdArTraff = Array.isArray(data.traffar) && data.vald_byggnad_id != null
+      && data.traffar.some((traff) => traff.byggnad_id === data.vald_byggnad_id);
+    const antalAndra = Math.max(0, (data.antal_traffar || 0) - (valdArTraff ? 1 : 0));
+    // Återanvänder tillsynsradarns befintliga "Skanna vyn"-flöde (korRadar) —
+    // samma motor, samma måttstock; ingen egen radie-specifik skanning byggs
+    // här (den ägs av radar-sessionen/Task 5).
+    panel.setStrandskyddKandidater(antalAndra, antalAndra > 0 ? korRadar : null);
   }
 
   // Biografi-stripen ritar om varje gång ett kort sätter/rensar sin data —
@@ -372,7 +404,9 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
 
   async function korOchRendera(check, [e3014, n3014]) {
     delete senasteStatus[check.key];
+    laddandeChecks.add(check.key);
     panel.setCardLoading(check.key);
+    renderaSammanfattning();
     let data;
     let status = 0;
     try {
@@ -383,11 +417,13 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       data = await resp.json();
     } catch (err) {
       console.error(`geotillsyn: ${check.path} misslyckades`, err);
+      laddandeChecks.delete(check.key);
       visaStatus(check.key, { typ: 'fel' });
       return;
     }
     if (status === 404 && data && data.fel) {
       // Ärligt "hittades inte"-svar (ingen byggnad/inget lov) — info, inte fel.
+      laddandeChecks.delete(check.key);
       visaStatus(check.key, { typ: 'info', text: data.fel });
       if (check.key === 'lovavvikelse') {
         clearOverlay();
@@ -396,15 +432,18 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       return;
     }
     if (status >= 400) {
+      laddandeChecks.delete(check.key);
       visaStatus(check.key, {
         typ: 'fel',
         text: (data && data.fel) || `HTTP ${status}`
       });
       return;
     }
+    laddandeChecks.delete(check.key);
     senasteData[check.key] = data;
     renderaKort(check.key);
     uppdateraBiografiData();
+    renderaSammanfattning();
     if (check.key === 'lovavvikelse') {
       if (data.lov_hittat) {
         hamtaFall3Geometri(e3014, n3014, check.radie);
@@ -582,7 +621,9 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     // Ett kartklick är alltid en analysbegäran: är panelen ihopfälld öppnas
     // den — ett klick får aldrig se ut att göra ingenting.
     if (kollapsad) setKollapsad(false);
-    panel.startaAnalys();
+    // evt.coordinate är i kartans egen projektion (SWEREF 99 TM / EPSG:3006,
+    // se geotillsyn.json) — samma koordinat som "Granskad punkt"-raden visar.
+    panel.startaAnalys(evt.coordinate);
     identify(evt);
     const punkt = transformTill3014(evt.coordinate);
     if (!punkt) {
@@ -668,6 +709,7 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     // meddelandekoder, så språkbytet kräver ingen ny hämtning.
     new Set([...Object.keys(senasteData), ...Object.keys(senasteStatus)])
       .forEach(renderaKort);
+    renderaSammanfattning();
     renderaSnedbilder();
     if (senasteRadar && panel.el.querySelector('.gt-radar')) renderaRadar();
     visaAr(aktuelltAr);

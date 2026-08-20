@@ -139,6 +139,30 @@ test('teckenTal: plus-prefix på positiva, minus följer med negativa', () => {
   assert.equal(teckenTal(0, 'sv'), '0');
 });
 
+test('nya v0.7 Task 2-nycklar krockar inte med befintliga forstSynlig/ingenPreskription', () => {
+  // forstSynlig är sedan tidigare en funktion (biografins gap-etikett);
+  // ingenPreskription en sträng med MÖD-referens (biografins klocketikett).
+  // Task 2 lägger nya, egna nycklar i stället för att skriva över dem.
+  assert.equal(typeof TEXTS.sv.forstSynlig, 'function');
+  assert.equal(TEXTS.sv.forstSynlig(1998, 2001), 'först synlig 1998–2001');
+  assert.equal(TEXTS.sv.ingenPreskription, 'ingen preskription · MÖD 2021:6');
+  assert.equal(typeof TEXTS.sv.forstSynligOrtofoto, 'string');
+  assert.equal(TEXTS.sv.forstSynligOrtofoto, 'först synlig i ortofoto');
+  assert.equal(TEXTS.en.forstSynligOrtofoto, 'first visible in orthophoto');
+  assert.equal(TEXTS.sv.ingenPreskriptionKort, 'ingen preskription');
+  assert.equal(TEXTS.en.ingenPreskriptionKort, 'no limitation period');
+});
+
+test('osakerheterChip/registretSager/zon/uppford/andraByggnader komponerar tal på båda språken', () => {
+  assert.equal(TEXTS.sv.osakerheterChip(6), '6 osäkerheter');
+  assert.equal(TEXTS.en.osakerheterChip(6), '6 uncertainties');
+  assert.equal(TEXTS.sv.registretSager(2014), 'registret säger 2014');
+  assert.equal(TEXTS.sv.zon('2281K-ÖVR-241'), 'zon 2281K-ÖVR-241');
+  assert.equal(TEXTS.sv.uppford(2014), 'uppförd 2014');
+  assert.equal(TEXTS.sv.andraByggnader(27), '27 andra byggnader inom 150 m berör zonen');
+  assert.equal(TEXTS.en.andraByggnader(27), '27 other buildings within 150 m touch the zone');
+});
+
 test('rubrik-funktionerna komponerar neutrala rubriker', () => {
   const t = TEXTS.sv;
   assert.equal(t.rubrikOlovligt(1998, 2001), 'Uppförd 1998–2001 enligt ortofoto');

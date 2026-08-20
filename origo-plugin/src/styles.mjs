@@ -25,10 +25,10 @@ export function cssText() {
   --gt-fel-bg: #fdf0f0;
   --gt-radie: 8px;
   --gt-skugga: 0 1px 2px rgba(22,32,46,.08), 0 4px 16px rgba(22,32,46,.10);
-  --gt-panel-bredd: 380px;
+  --gt-panel-bredd: 420px;
   font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: var(--gt-ink);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
   box-sizing: border-box;
 }
@@ -117,6 +117,20 @@ export function cssText() {
 }
 .gt-fastighet__namn { font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
 .gt-fastighet__namn--saknas { font-weight: 400; color: var(--gt-ink-svag); font-style: italic; }
+.gt-fastighet__punkt { margin-top: .25rem; font-size: 11px; color: var(--gt-ink-svag); }
+
+/* ---------- sammanfattningsrad: en chip per kontroll, underlagsläge (aldrig utfall) ---------- */
+.gt-sammanfattning { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 .9rem; }
+.gt-chip { display: flex; flex-direction: column; align-items: flex-start; gap: .05rem;
+  border: 1px solid var(--gt-kant); border-radius: 10px; background: var(--gt-yta-svag);
+  padding: .3rem .6rem; cursor: pointer; font: inherit; color: inherit; text-align: left; }
+.gt-chip:hover { background: var(--gt-yta); border-color: #c4cdda; }
+.gt-chip:focus-visible { outline: 2px solid var(--gt-accent); outline-offset: 1px; }
+.gt-chip__namn { font-size: 11px; font-weight: 700; }
+.gt-chip__lage { font-size: 10.5px; color: var(--gt-ink-svag); }
+.gt-chip--osakert .gt-chip__lage { color: var(--gt-varning-ink); }
+.gt-chip--fel .gt-chip__lage { color: var(--gt-fel-ink); }
+.gt-chip--finns .gt-chip__lage { color: var(--gt-accent-mork); }
 
 /* ---------- kontrollkort ---------- */
 .gt-kort {
@@ -135,6 +149,21 @@ export function cssText() {
 .gt-kort__under { display: block; font-size: 11px; color: var(--gt-ink-svag); }
 .gt-kort__status { padding: .45rem .75rem .6rem; }
 .gt-rubrikrad { font-size: 13px; font-weight: 600; }
+.gt-kort__tal { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums;
+  display: flex; align-items: baseline; gap: .5rem; }
+.gt-kort__badge { font-size: 11px; font-weight: 700; padding: .1rem .5rem; border-radius: 999px;
+  background: var(--gt-varning-bg); color: var(--gt-varning-ink); border: 1px solid var(--gt-varning-kant); }
+.gt-kort__underrad { margin-top: .15rem; font-size: 13px; color: var(--gt-ink-svag); }
+.gt-osakerhet-chip { display: inline-flex; align-items: center; gap: .3rem; margin-top: .55rem;
+  border: 1px solid var(--gt-varning-kant); background: var(--gt-varning-bg); color: var(--gt-varning-ink);
+  border-radius: 999px; padding: .18rem .6rem; font: inherit; font-size: 11.5px; font-weight: 700;
+  cursor: pointer; }
+.gt-osakerhet-chip::after { content: '▸'; font-size: 10px; transition: transform .15s ease; }
+.gt-osakerhet-chip[aria-expanded="true"]::after { transform: rotate(90deg); }
+.gt-kort__kandidatrad { display: flex; align-items: center; justify-content: space-between;
+  gap: .6rem; margin-top: .55rem; padding-top: .55rem; border-top: 1px dashed var(--gt-kant);
+  font-size: 12px; color: var(--gt-ink-svag); }
+.gt-kort__visakandidater { flex: none; }
 .gt-kort__innehall { border-top: 1px solid var(--gt-kant); background: var(--gt-yta-svag); }
 .gt-info { color: var(--gt-ink-svag); font-size: 12.5px; padding: .1rem 0; }
 
@@ -164,7 +193,7 @@ export function cssText() {
 .gt-sektion[open] summary::after { transform: rotate(90deg); }
 .gt-sektion__inner { padding: 0 .75rem .6rem; }
 .gt-rad { display: flex; justify-content: space-between; gap: 1rem;
-  padding: .22rem 0; border-bottom: 1px dashed var(--gt-kant); font-size: 12.5px; }
+  padding: .22rem 0; border-bottom: 1px dashed var(--gt-kant); font-size: 13.5px; }
 .gt-rad:last-child { border-bottom: none; }
 .gt-rad__etikett { color: var(--gt-ink-svag); }
 .gt-rad__varde { text-align: right; font-weight: 600; overflow-wrap: anywhere; }
@@ -183,6 +212,14 @@ export function cssText() {
 .gt-kallor ul { margin: .15rem 0 0; padding-left: 1rem; }
 .gt-kallor a { color: var(--gt-accent); text-decoration: none; }
 .gt-kallor a:hover { text-decoration: underline; }
+
+/* ---------- beslut-block: avsiktligt tomt, verktyget beslutar aldrig ---------- */
+.gt-beslut { border: 1px dashed var(--gt-kant); border-radius: var(--gt-radie);
+  background: var(--gt-yta-svag); margin-bottom: .7rem; padding: .6rem .75rem .75rem; }
+.gt-beslut .gt-kort__huvud { padding: 0 0 .4rem; }
+.gt-beslut__falt { border: 1px dashed var(--gt-kant); border-radius: 6px;
+  padding: .55rem .6rem; text-align: center; color: var(--gt-ink-svag); font-size: 12.5px; }
+.gt-beslut__under { margin-top: .4rem; font-size: 11.5px; color: var(--gt-ink-svag); }
 
 /* ---------- tillsynsradar ---------- */
 .gt-radarknapp { display: inline-flex; align-items: center; gap: .3rem; }
