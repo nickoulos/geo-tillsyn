@@ -139,7 +139,18 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
   let senasteKlickKarta = null;
   // Auto-zoom får bara hända en gång per klick: språkbyten och andra
   // omritningar av samma svar ska inte rycka undan kartvyn under läsaren.
+  // "Försök igen" på Fall 3-kortet återanvänder samma klick (rearmas explicit
+  // i onRetry) — ett nytt kartklick nollställer den här via pahandlaKlick.
   let harAutozoomatFörKlick = false;
+  // Klicktoken: ett snabbt andra klick startar en ny asynkron kedja innan den
+  // första hunnit svara. Utan detta kan ett sent svar från klick A (404,
+  // fel, "inget lov") rensa eller om-zooma kartan efter att klick B redan
+  // ritat sitt eget overlägg. Varje pahandlaKlick ökar räknaren och skickar
+  // token nedåt genom korOchRendera/hamtaFall3Geometri/ritaFall3Overlay/
+  // autoZoomTill* — alla jämför mot klickSekvens innan de rör kartan.
+  // "Försök igen" återanvänder den AKTUELLA token (ökar inte räknaren): en
+  // omkörning av samma klicks Fall 3-kontroll är inte ett nytt klick.
+  let klickSekvens = 0;
 
   function t() {
     return TEXTS[aktivtSprak];
@@ -271,8 +282,9 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
 
   // Faktisk fit() — guardad så bara det första svaret för ett klick får flytta
   // vyn (språkbyten och andra omritningar av samma data ska stå still).
-  function autoZoomTillExtent(extent) {
+  function autoZoomTillExtent(extent, token) {
     if (harAutozoomatFörKlick) return;
+    if (token !== klickSekvens) return; // ett senare klick äger redan kartan
     const ol = getOl();
     const map = viewer && viewer.getMap();
     if (!ol || !map || !extent) return;
@@ -286,10 +298,11 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
 
   // 80 m-ruta runt klickpunkten (kartans CRS) — fallback när ingen overlägg-
   // geometri kunde ritas (404/fel/inget lov).
-  function autoZoomTillPunkt() {
+  function autoZoomTillPunkt(token) {
     if (harAutozoomatFörKlick) return;
+    if (token !== klickSekvens) return;
     if (!senasteKlickKarta) return;
-    autoZoomTillExtent(fallbackExtent(senasteKlickKarta));
+    autoZoomTillExtent(fallbackExtent(senasteKlickKarta), token);
   }
 
   /* --- klickmarkör: ring + prick på senaste klickpunkten --- */
@@ -339,15 +352,18 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
   // Ritar godkänt (blått) och verkligt (rött) läge från /api/lovavvikelse/geometri.
   // Reprojicerar EPSG:3014 -> kartans projektion via ol.format.GeoJSON, som
   // kräver att EPSG:3014 är registrerad hos proj4 (registreraEpsg3014 ovan).
-  function ritaFall3Overlay(geometriData) {
+  function ritaFall3Overlay(geometriData, token) {
+    // Ett senare klick har redan tagit över kartan — rör varken overlägget
+    // eller vyn med det här (stale) svaret.
+    if (token !== klickSekvens) return;
     const ol = getOl();
     clearOverlay();
     visaLegend(false);
     if (!ol || !overlayLayer) return;
-    if (!geometriData.lov_hittat) { autoZoomTillPunkt(); return; }
+    if (!geometriData.lov_hittat) { autoZoomTillPunkt(token); return; }
     if (!epsg3014Registrerad) {
       console.error('geotillsyn: EPSG:3014 ej registrerad — Fall 3-overlay ritas inte.');
-      autoZoomTillPunkt();
+      autoZoomTillPunkt(token);
       return;
     }
 
@@ -389,13 +405,13 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     });
     visaLegend(nagotRitat);
     if (nagotRitat) {
-      autoZoomTillExtent(overlayLayer.getSource().getExtent());
+      autoZoomTillExtent(overlayLayer.getSource().getExtent(), token);
     } else {
-      autoZoomTillPunkt();
+      autoZoomTillPunkt(token);
     }
   }
 
-  async function hamtaFall3Geometri(e3014, n3014, radie) {
+  async function hamtaFall3Geometri(e3014, n3014, radie, token) {
     const url = `${apiUrl}/api/lovavvikelse/geometri?easting=${encodeURIComponent(e3014)}`
       + `&northing=${encodeURIComponent(n3014)}&radie_m=${encodeURIComponent(radie)}`;
     try {
@@ -403,13 +419,13 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       const json = await resp.json();
       if (!resp.ok) {
         console.error('geotillsyn: /api/lovavvikelse/geometri gav fel', json);
-        autoZoomTillPunkt();
+        autoZoomTillPunkt(token);
         return;
       }
-      ritaFall3Overlay(json);
+      ritaFall3Overlay(json, token);
     } catch (err) {
       console.error('geotillsyn: fetch mot /api/lovavvikelse/geometri misslyckades', err);
-      autoZoomTillPunkt();
+      autoZoomTillPunkt(token);
     }
   }
 
@@ -499,7 +515,7 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     });
   }
 
-  async function korOchRendera(check, [e3014, n3014]) {
+  async function korOchRendera(check, [e3014, n3014], token) {
     delete senasteStatus[check.key];
     laddandeChecks.add(check.key);
     panel.setCardLoading(check.key);
@@ -518,17 +534,19 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       visaStatus(check.key, { typ: 'fel' });
       // Nätverksfelet stoppar hela kedjan (geometri-hämtningen sker aldrig) —
       // utan fallbacken skulle kartan aldrig zooma alls när backend är nere.
-      if (check.key === 'lovavvikelse') autoZoomTillPunkt();
+      if (check.key === 'lovavvikelse') autoZoomTillPunkt(token);
       return;
     }
     if (status === 404 && data && data.fel) {
       // Ärligt "hittades inte"-svar (ingen byggnad/inget lov) — info, inte fel.
       laddandeChecks.delete(check.key);
       visaStatus(check.key, { typ: 'info', text: data.fel });
-      if (check.key === 'lovavvikelse') {
+      // token-guardat: ett sent svar på ett ÄLDRE klick får inte rensa
+      // overlägget som ett nyare klick redan hunnit rita.
+      if (check.key === 'lovavvikelse' && token === klickSekvens) {
         clearOverlay();
         visaLegend(false);
-        autoZoomTillPunkt();
+        autoZoomTillPunkt(token);
       }
       return;
     }
@@ -538,7 +556,7 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
         typ: 'fel',
         text: (data && data.fel) || `HTTP ${status}`
       });
-      if (check.key === 'lovavvikelse') autoZoomTillPunkt();
+      if (check.key === 'lovavvikelse') autoZoomTillPunkt(token);
       return;
     }
     laddandeChecks.delete(check.key);
@@ -548,11 +566,11 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     renderaSammanfattning();
     if (check.key === 'lovavvikelse') {
       if (data.lov_hittat) {
-        hamtaFall3Geometri(e3014, n3014, check.radie);
-      } else {
+        hamtaFall3Geometri(e3014, n3014, check.radie, token);
+      } else if (token === klickSekvens) {
         clearOverlay();
         visaLegend(false);
-        autoZoomTillPunkt();
+        autoZoomTillPunkt(token);
       }
     }
     if (check.key === 'strandskydd') visaZonlagerOmRelevant();
@@ -728,6 +746,10 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     // evt.coordinate är i kartans egen projektion (SWEREF 99 TM / EPSG:3006,
     // se geotillsyn.json) — samma koordinat som "Granskad punkt"-raden visar.
     panel.startaAnalys(evt.coordinate);
+    // Nytt klick = ny token. Alla asynkrona svar på FÖREGÅENDE klicks kedja
+    // (korOchRendera/hamtaFall3Geometri/ritaFall3Overlay/autoZoomTill*) bär
+    // sin egen (nu gamla) token och blir no-op så fort de jämför mot detta.
+    const token = ++klickSekvens;
     senasteKlickKarta = evt.coordinate;
     harAutozoomatFörKlick = false;
     ritaKlickMarkor(evt.coordinate);
@@ -735,11 +757,11 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     const punkt = transformTill3014(evt.coordinate);
     if (!punkt) {
       CHECKS.forEach((c) => visaStatus(c.key, { typ: 'fel', suffix: ' (EPSG:3014)' }));
-      autoZoomTillPunkt();
+      autoZoomTillPunkt(token);
       return;
     }
     senastePunkt3014 = punkt;
-    CHECKS.forEach((c) => korOchRendera(c, punkt));
+    CHECKS.forEach((c) => korOchRendera(c, punkt, token));
     hamtaSnedbilder(punkt);
   }
 
@@ -869,7 +891,13 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
         onKollaps: () => setKollapsad(true),
         onRetry: (key) => {
           const check = CHECKS.find((c) => c.key === key);
-          if (check && senastePunkt3014) korOchRendera(check, senastePunkt3014);
+          if (!check || !senastePunkt3014) return;
+          // "Försök igen" är samma klick, inte ett nytt — återanvänd aktuell
+          // token, men rearma auto-zoomen för lovavvikelse: fallbacken kan
+          // redan ha konsumerat den (80 m-rutan) innan omförsöket lyckas och
+          // ritar ett riktigt overlägg, som då annars aldrig skulle zoomas till.
+          if (key === 'lovavvikelse') harAutozoomatFörKlick = false;
+          korOchRendera(check, senastePunkt3014, klickSekvens);
         },
         onRadar: korRadar,
         onRadarVal: valjRadarKandidat,
