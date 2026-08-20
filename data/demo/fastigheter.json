@@ -1,0 +1,485 @@
+{
+  "genererad": "2026-08-19T18:03:17Z",
+  "fastigheter": [
+    {
+      "fastighet": "ALNÖ-USLAND 1:45",
+      "trakt": "ALNÖ-USLAND",
+      "fBetNr": "1:45",
+      "fnr": 220042175,
+      "area_m2": 2455,
+      "centroid": {
+        "easting": 158130.6,
+        "northing": 6918380.4,
+        "crs": "EPSG:3014"
+      },
+      "bbox": [
+        158089.8,
+        6918350.2,
+        158170.6,
+        6918409.9
+      ],
+      "antal_byggnader": 3,
+      "antal_i_strandskydd": 3,
+      "byggnader": [
+        {
+          "byggnad_id": "bal_byggnad_yta.26007",
+          "klickpunkt": {
+            "easting": 158132.7,
+            "northing": 6918380.3,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 325.6,
+          "bal_nybyggnadsar": 2014,
+          "andamal": "Bostad: Småhus friliggande (250kvm)",
+          "strandskydd": "inom",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": []
+        },
+        {
+          "byggnad_id": "bal_byggnad_yta.37874",
+          "klickpunkt": {
+            "easting": 158101.5,
+            "northing": 6918384.8,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 64.0,
+          "bal_nybyggnadsar": null,
+          "andamal": "Komplementbyggnad",
+          "strandskydd": "inom",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": [
+            {
+              "typ": "Ledningsrätt",
+              "aktbeteckning": "2281-80/58",
+              "andamal": "VATTEN OCH AVLOPP"
+            }
+          ]
+        },
+        {
+          "byggnad_id": "bal_byggnad_yta.38472",
+          "klickpunkt": {
+            "easting": 158139.6,
+            "northing": 6918390.0,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 55.5,
+          "bal_nybyggnadsar": 2014,
+          "andamal": "Komplementbyggnad",
+          "strandskydd": "inom",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": []
+        }
+      ],
+      "osakerheter": []
+    },
+    {
+      "fastighet": "ALNÖ-VI 3:100",
+      "trakt": "ALNÖ-VI",
+      "fBetNr": "3:100",
+      "fnr": 220043304,
+      "area_m2": 1645,
+      "centroid": {
+        "easting": 158214.8,
+        "northing": 6918120.4,
+        "crs": "EPSG:3014"
+      },
+      "bbox": [
+        158190.7,
+        6918089.2,
+        158240.5,
+        6918151.9
+      ],
+      "antal_byggnader": 4,
+      "antal_i_strandskydd": 3,
+      "byggnader": [
+        {
+          "byggnad_id": "bal_byggnad_yta.36609",
+          "klickpunkt": {
+            "easting": 158218.2,
+            "northing": 6918121.4,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 141.2,
+          "bal_nybyggnadsar": 2014,
+          "andamal": "Bostad: Småhus friliggande (200kvm)",
+          "strandskydd": "delvis",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": []
+        },
+        {
+          "byggnad_id": "bal_byggnad_yta.37551",
+          "klickpunkt": {
+            "easting": 158214.8,
+            "northing": 6918136.0,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 93.1,
+          "bal_nybyggnadsar": 2014,
+          "andamal": "Komplementbyggnad",
+          "strandskydd": "delvis",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": []
+        },
+        {
+          "byggnad_id": "bal_byggnad_yta.61210",
+          "klickpunkt": {
+            "easting": 158230.2,
+            "northing": 6918104.8,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 23.1,
+          "bal_nybyggnadsar": null,
+          "andamal": "Komplementbyggnad",
+          "strandskydd": "utanför",
+          "zon_referenser": [],
+          "rattigheter": []
+        },
+        {
+          "byggnad_id": "bal_byggnad_yta.32607",
+          "klickpunkt": {
+            "easting": 158208.3,
+            "northing": 6918099.9,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 22.3,
+          "bal_nybyggnadsar": null,
+          "andamal": "Komplementbyggnad",
+          "strandskydd": "inom",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": []
+        }
+      ],
+      "osakerheter": []
+    },
+    {
+      "fastighet": "NJURUNDA PRÄSTBOL 1:117",
+      "trakt": "NJURUNDA PRÄSTBOL",
+      "fBetNr": "1:117",
+      "fnr": 220190736,
+      "area_m2": 44077,
+      "centroid": {
+        "easting": 156044.3,
+        "northing": 6906815.7,
+        "crs": "EPSG:3014"
+      },
+      "bbox": [
+        155841.3,
+        6906681.4,
+        156223.5,
+        6906931.0
+      ],
+      "antal_byggnader": 9,
+      "antal_i_strandskydd": 9,
+      "byggnader": [
+        {
+          "byggnad_id": "bal_byggnad_yta.86855",
+          "klickpunkt": {
+            "easting": 156070.8,
+            "northing": 6906834.0,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 2844.0,
+          "bal_nybyggnadsar": null,
+          "andamal": "Samhällsfunktion: Ishall",
+          "strandskydd": "delvis",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": [
+            {
+              "typ": "Officialservitut",
+              "aktbeteckning": "2281K-F-3868",
+              "andamal": "VÄG"
+            }
+          ]
+        },
+        {
+          "byggnad_id": "bal_byggnad_yta.86854",
+          "klickpunkt": {
+            "easting": 156112.0,
+            "northing": 6906834.8,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 594.0,
+          "bal_nybyggnadsar": null,
+          "andamal": "Samhällsfunktion: Ishall",
+          "strandskydd": "delvis",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": []
+        },
+        {
+          "byggnad_id": "bal_byggnad_yta.86332",
+          "klickpunkt": {
+            "easting": 156011.0,
+            "northing": 6906807.3,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 353.9,
+          "bal_nybyggnadsar": null,
+          "andamal": "Komplementbyggnad",
+          "strandskydd": "inom",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": []
+        },
+        {
+          "byggnad_id": "bal_byggnad_yta.279",
+          "klickpunkt": {
+            "easting": 156112.8,
+            "northing": 6906790.9,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 158.9,
+          "bal_nybyggnadsar": null,
+          "andamal": "Komplementbyggnad",
+          "strandskydd": "inom",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": []
+        },
+        {
+          "byggnad_id": "bal_byggnad_yta.22995",
+          "klickpunkt": {
+            "easting": 156096.0,
+            "northing": 6906747.8,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 64.5,
+          "bal_nybyggnadsar": null,
+          "andamal": "Ekonomibyggnad",
+          "strandskydd": "inom",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": [
+            {
+              "typ": "Officialservitut",
+              "aktbeteckning": "2281K-F-2642",
+              "andamal": "PARKERING"
+            }
+          ]
+        },
+        {
+          "byggnad_id": "bal_byggnad_yta.4086",
+          "klickpunkt": {
+            "easting": 156107.5,
+            "northing": 6906781.7,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 61.5,
+          "bal_nybyggnadsar": 2014,
+          "andamal": "Komplementbyggnad",
+          "strandskydd": "inom",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": []
+        },
+        {
+          "byggnad_id": "bal_byggnad_yta.86522",
+          "klickpunkt": {
+            "easting": 156062.8,
+            "northing": 6906801.9,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 36.2,
+          "bal_nybyggnadsar": null,
+          "andamal": "Komplementbyggnad",
+          "strandskydd": "inom",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": []
+        },
+        {
+          "byggnad_id": "bal_byggnad_yta.86359",
+          "klickpunkt": {
+            "easting": 156091.1,
+            "northing": 6906740.1,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 21.1,
+          "bal_nybyggnadsar": null,
+          "andamal": "Komplementbyggnad",
+          "strandskydd": "inom",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": [
+            {
+              "typ": "Officialservitut",
+              "aktbeteckning": "2281K-F-2642",
+              "andamal": "PARKERING"
+            }
+          ]
+        },
+        {
+          "byggnad_id": "bal_byggnad_yta.76407",
+          "klickpunkt": {
+            "easting": 156091.4,
+            "northing": 6906777.1,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 5.1,
+          "bal_nybyggnadsar": null,
+          "andamal": "Komplementbyggnad",
+          "strandskydd": "inom",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": []
+        }
+      ],
+      "osakerheter": []
+    },
+    {
+      "fastighet": "ALNÖ-VI 3:109",
+      "trakt": "ALNÖ-VI",
+      "fBetNr": "3:109",
+      "fnr": 220043313,
+      "area_m2": 1548,
+      "centroid": {
+        "easting": 158219.8,
+        "northing": 6918076.5,
+        "crs": "EPSG:3014"
+      },
+      "bbox": [
+        158194.5,
+        6918048.8,
+        158245.6,
+        6918105.4
+      ],
+      "antal_byggnader": 2,
+      "antal_i_strandskydd": 2,
+      "byggnader": [
+        {
+          "byggnad_id": "bal_byggnad_yta.69352",
+          "klickpunkt": {
+            "easting": 158225.7,
+            "northing": 6918077.1,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 178.3,
+          "bal_nybyggnadsar": 2016,
+          "andamal": "Bostad: Småhus friliggande (160kvm)",
+          "strandskydd": "inom",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": []
+        },
+        {
+          "byggnad_id": "bal_byggnad_yta.84325",
+          "klickpunkt": {
+            "easting": 158207.0,
+            "northing": 6918089.5,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 10.8,
+          "bal_nybyggnadsar": 2025,
+          "andamal": "Komplementbyggnad",
+          "strandskydd": "inom",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": []
+        }
+      ],
+      "osakerheter": []
+    },
+    {
+      "fastighet": "ALNÖ-USLAND 7:1",
+      "trakt": "ALNÖ-USLAND",
+      "fBetNr": "7:1",
+      "fnr": 220042649,
+      "area_m2": 2006,
+      "centroid": {
+        "easting": 158112.4,
+        "northing": 6918472.1,
+        "crs": "EPSG:3014"
+      },
+      "bbox": [
+        158071.5,
+        6918446.3,
+        158152.9,
+        6918497.9
+      ],
+      "antal_byggnader": 1,
+      "antal_i_strandskydd": 1,
+      "byggnader": [
+        {
+          "byggnad_id": "bal_byggnad_yta.50402",
+          "klickpunkt": {
+            "easting": 158118.4,
+            "northing": 6918477.4,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 293.2,
+          "bal_nybyggnadsar": 2015,
+          "andamal": "Bostad: Småhus friliggande",
+          "strandskydd": "inom",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": []
+        }
+      ],
+      "osakerheter": []
+    },
+    {
+      "fastighet": "RÖKLAND 1:82",
+      "trakt": "RÖKLAND",
+      "fBetNr": "1:82",
+      "fnr": 220072670,
+      "area_m2": 850,
+      "centroid": {
+        "easting": 159337.3,
+        "northing": 6916478.1,
+        "crs": "EPSG:3014"
+      },
+      "bbox": [
+        159310.8,
+        6916458.6,
+        159361.8,
+        6916498.2
+      ],
+      "antal_byggnader": 1,
+      "antal_i_strandskydd": 1,
+      "byggnader": [
+        {
+          "byggnad_id": "bal_byggnad_yta.81535",
+          "klickpunkt": {
+            "easting": 159335.3,
+            "northing": 6916475.5,
+            "crs": "EPSG:3014"
+          },
+          "area_m2": 115.3,
+          "bal_nybyggnadsar": 2015,
+          "andamal": "Bostad: Småhus friliggande (106kvm)",
+          "strandskydd": "inom",
+          "zon_referenser": [
+            "2281K-ÖVR-241"
+          ],
+          "rattigheter": []
+        }
+      ],
+      "osakerheter": []
+    }
+  ]
+}
