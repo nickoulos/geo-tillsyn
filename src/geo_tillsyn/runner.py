@@ -18,7 +18,7 @@ from shapely.geometry import Point, mapping, shape
 from geo_tillsyn.analysis import analysera_strandskydd, komplettera_med_regellager
 from geo_tillsyn.datering import datera_byggnad
 from geo_tillsyn.delta import jamfor_lage
-from geo_tillsyn.dossier import Fakta, Kalla, render_markdown
+from geo_tillsyn.dossier import Fakta, Kalla, render_klarsprak, render_markdown
 from geo_tillsyn.fall1 import bygg_fall1_dossier
 from geo_tillsyn.fall3 import bygg_fall3_dossier
 from geo_tillsyn.fall7 import bygg_dossier
@@ -333,6 +333,10 @@ def kor_fall7(
 
     dossier_fil = ut_katalog / "dossier.md"
     dossier_fil.write_text(md, encoding="utf-8")
+    # Samma underlag i klarspråk för berörd part — två vyer, en sanning.
+    (ut_katalog / "dossier_klarsprak.md").write_text(
+        render_klarsprak(dossier), encoding="utf-8"
+    )
     return dossier_fil
 
 
@@ -594,6 +598,10 @@ def kor_fall1(
 
     dossier_fil = ut_katalog / "fall1_dossier.md"
     dossier_fil.write_text(md, encoding="utf-8")
+    # Samma underlag i klarspråk för berörd part — två vyer, en sanning.
+    (ut_katalog / "fall1_dossier_klarsprak.md").write_text(
+        render_klarsprak(dossier), encoding="utf-8"
+    )
     return dossier_fil
 
 
@@ -973,6 +981,10 @@ def kor_fall3(
 
     dossier_fil = ut_katalog / "fall3_dossier.md"
     dossier_fil.write_text(md, encoding="utf-8")
+    # Samma underlag i klarspråk för berörd part — två vyer, en sanning.
+    (ut_katalog / "fall3_dossier_klarsprak.md").write_text(
+        render_klarsprak(dossier), encoding="utf-8"
+    )
     return dossier_fil
 
 

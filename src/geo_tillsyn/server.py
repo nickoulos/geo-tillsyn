@@ -99,7 +99,7 @@ def generera_dossier(
 ) -> dict:
     """Generera den fullständiga tre-nivå-dossieren + ortofoto-tidslinje på disk.
 
-    Skriver dossier.md (Fakta med klickbara källor / Bedömning med osäkerheter /
+    Skriver dossier.md + dossier_klarsprak.md (Fakta med klickbara källor / Bedömning med osäkerheter /
     Beslut — alltid tomt, handläggarens) samt tidslinje-PNG:er. Returnerar
     sökvägar och en kompakt sammanfattning — aldrig bildinnehåll.
 
@@ -128,6 +128,7 @@ def generera_dossier(
         tidslinje = [f for f in tidslinje if int(f.stem.split("_")[1]) in ortofoto_ar]
     return {
         "dossier": str(dossier_fil),
+        "dossier_klarsprak": str(dossier_fil.with_name("dossier_klarsprak.md")),
         "tidslinje": [
             {
                 "ar": int(fil.stem.split("_")[1]),

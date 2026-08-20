@@ -171,3 +171,23 @@ def test_analysera_punkt_bar_komplement_och_forbehall():
     assert "runner.upphavt_strandskydd_konflikt" in koder
     assert "geodata.snapshot_anvant" in koder
     assert "runner.regellager_otillgangligt" not in koder
+
+
+def test_kor_fall7_skriver_aven_klarspraksvyn(tmp_path):
+    dossier_fil = kor_fall7(
+        ows_url=OWS,
+        punkt=(15.0, 15.0),
+        radie_m=100.0,
+        ut_katalog=tmp_path,
+        nu="2026-08-20T10:00:00Z",
+        ar=[1960, 2023],
+        hamta_wfs=_fejk_wfs,
+        hamta_wms=_fejk_wms,
+    )
+    klarsprak = dossier_fil.with_name("dossier_klarsprak.md")
+    assert klarsprak.exists()
+    text = klarsprak.read_text(encoding="utf-8")
+    assert "## Vad handlar det här om?" in text
+    assert "inte ett beslut" in text
+    # Ordlistan förklarar strandskydd — termen förekommer alltid i Fall 7.
+    assert "**strandskydd**" in text
