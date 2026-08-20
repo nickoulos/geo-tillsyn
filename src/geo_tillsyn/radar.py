@@ -19,7 +19,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, Callable
 
-from shapely.geometry import shape
+from shapely.geometry import box, mapping, shape
 
 from geo_tillsyn.analysis import ZonAnalys, analysera_strandskydd, komplettera_med_regellager
 from geo_tillsyn.geodata import getfeature_url, hamta_wfs_robust, kalla_typ
@@ -103,6 +103,26 @@ def _kontrollera_zon(bbox: tuple[float, float, float, float]) -> None:
         )
 
 
+def _klipp_till_zon(fc: dict, bbox: tuple[float, float, float, float], marginal_m: float = 50.0) -> dict:
+    """Klipp regellagrets polygoner till zonen (+marginal) innan analysen.
+
+    Strandskyddszonerna är få men enorma polygoner (hela kuststräckor); att
+    snitta 800+ byggnader mot dem oklippta tar minuter. Klippta till rutan tar
+    samma analys sekunder — och resultatet inom rutan är identiskt, eftersom
+    varje byggnad ligger i rutan. Egenskaper/id följer med för källreferenser.
+    """
+    ruta = box(bbox[0] - marginal_m, bbox[1] - marginal_m, bbox[2] + marginal_m, bbox[3] + marginal_m)
+    features = []
+    for f in fc.get("features", []):
+        if not f.get("geometry"):
+            continue
+        klippt = shape(f["geometry"]).intersection(ruta)
+        if klippt.is_empty:
+            continue
+        features.append({**f, "geometry": mapping(klippt)})
+    return {**fc, "features": features}
+
+
 def _kallforbehall(fc: dict, lager: str) -> list[str]:
     typ, hamtad = kalla_typ(fc)
     if typ == "snapshot":
@@ -176,8 +196,10 @@ def skanna_zon(
         osakerheter.append(M("radar.fastighetslager_otillgangligt", lager=FASTIGHET_LAYER))
     osakerheter.append(M("runner.dispenser_ej_kontrollerade"))
 
-    analyser = analysera_strandskydd(byggnader, strandskydd)
-    komplement = komplettera_med_regellager(byggnader, regellager)
+    analyser = analysera_strandskydd(byggnader, _klipp_till_zon(strandskydd, bbox))
+    komplement = komplettera_med_regellager(
+        byggnader, {lager: _klipp_till_zon(fc, bbox) for lager, fc in regellager.items()}
+    )
     fastighet_for = _fastighet_per_byggnad(byggnader, fastigheter)
     features_per_id = {str(f.get("id")): f for f in byggnader.get("features", [])}
     bedomningsdatum = date.fromisoformat(nu[:10])

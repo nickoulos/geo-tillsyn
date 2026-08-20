@@ -60,6 +60,7 @@ _ROT = Path(__file__).resolve().parents[2]
 CACHE_KATALOG = _ROT / "data" / "cache"
 SNAPSHOT_KATALOG = CACHE_KATALOG / "snapshot"
 WFS_CACHE_KATALOG = CACHE_KATALOG / "wfs"
+WMS_CACHE_KATALOG = CACHE_KATALOG / "wms"
 
 TIMEOUT_S = float(os.environ.get("GEO_TILLSYN_WFS_TIMEOUT", "30"))
 # GEO_TILLSYN_OFFLINE=1: hoppa över nätet helt (demo på osäker uppkoppling);
@@ -263,6 +264,49 @@ def hamta_wfs_robust(
         return cachad
 
     raise GeodataFel(f"{type_name}: {live_fel}") from live_fel
+
+
+# --- WMS-bildcache --------------------------------------------------------------
+
+# En riktig ortofoto-crop vid ~512 px är hundratals kB; nästan tomma svar är
+# WMS:ens tysta felläge (jfr timeline._MISSTANKT_TOM_GRANS) och cachas aldrig.
+_MIN_CACHEBAR_PNG = 20_000
+
+
+def hamta_wms_robust(
+    wms_url: str,
+    layer: str,
+    bbox: tuple[float, float, float, float],
+    crs: str,
+    width: int,
+    height: int,
+    *,
+    hamta: Callable[..., bytes],
+    katalog: Path = WMS_CACHE_KATALOG,
+    offline: bool = OFFLINE,
+) -> bytes:
+    """GetMap med disk-cache-först — för ortofoto-tidslinjens historiska årgångar.
+
+    Historiska ortofoton är oföränderliga och svaren byte-identiska mellan
+    hämtningar (verifierat live, docs/data-findings.md) — cache-först är därför
+    både ärligt och rätt: dateringen räknar på exakt samma pixlar som förra
+    körningen, och demon överlever att karta.sundsvall.se hickar (samma motiv
+    som WFS-vägarna ovan). Nästan tomma svar cachas aldrig — ett transient
+    WMS-fel får inte förgifta cachen och tysta en årgång för alltid.
+    """
+    nyckel = hashlib.sha256(
+        f"{wms_url}|{layer}|{','.join(str(v) for v in bbox)}|{crs}|{width}x{height}".encode()
+    ).hexdigest()[:24]
+    fil = katalog / f"{nyckel}.png"
+    if fil.exists():
+        return fil.read_bytes()
+    if offline:
+        raise GeodataFel(f"{layer}: offline-läge (GEO_TILLSYN_OFFLINE) och ingen cachad bild")
+    png = hamta(wms_url, layer=layer, bbox=bbox, crs=crs, width=width, height=height)
+    if len(png) >= _MIN_CACHEBAR_PNG:
+        katalog.mkdir(parents=True, exist_ok=True)
+        fil.write_bytes(png)
+    return png
 
 
 def kalla_typ(fc: dict[str, Any]) -> tuple[str, str | None]:

@@ -303,3 +303,36 @@ def test_analysera_punkt_bar_rattigheter_per_traff_och_deklarerar_otillgangliga_
     assert "rattigheter" not in trasigt["traffar"][0]
     koder = [getattr(o, "kod", None) for o in trasigt["osakerheter"]]
     assert koder.count("runner.rattighetslager_otillgangligt") == 4
+
+
+def test_kor_fall7_skriver_aven_klarspraksvyn(tmp_path):
+    dossier_fil = kor_fall7(
+        ows_url=OWS,
+        punkt=(15.0, 15.0),
+        radie_m=100.0,
+        ut_katalog=tmp_path,
+        nu="2026-08-20T10:00:00Z",
+        ar=[1960, 2023],
+        hamta_wfs=_fejk_wfs,
+        hamta_wms=_fejk_wms,
+    )
+    klarsprak = dossier_fil.with_name("dossier_klarsprak.md")
+    assert klarsprak.exists()
+    text = klarsprak.read_text(encoding="utf-8")
+    assert "## Vad handlar det här om?" in text
+    assert "inte ett beslut" in text
+    # Ordlistan förklarar strandskydd — termen förekommer alltid i Fall 7.
+    assert "**strandskydd**" in text
+
+
+def test_analysera_punkt_bar_resonemangskedja_for_forsta_traffen():
+    from geo_tillsyn.runner import analysera_punkt
+
+    resultat = analysera_punkt(
+        OWS, punkt=(15.0, 15.0), radie_m=100.0,
+        nu="2026-08-20T10:00:00Z", hamta_wfs=_fejk_wfs,
+    )
+    kedja = resultat["resonemang"]
+    assert [n["fraga"].kod for n in kedja][-1] == "resonemang.beslut"
+    assert kedja[-1]["svar"] is None
+    assert kedja[0]["svar"] in ("inom", "delvis")

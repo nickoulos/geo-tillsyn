@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { TEXTS } from '../src/i18n.mjs';
 import {
-  escapeHtml, formatVarde, composeHeadline, underlagsLage, renderCheckBody
+  escapeHtml, formatVarde, composeHeadline, underlagsLage, renderCheckBody,
+  renderResonemang
 } from '../src/dossier.mjs';
 
 const t = TEXTS.sv;
@@ -299,4 +300,34 @@ test('renderCheckBody: rättigheter per fall 7-träff renderas som lista, inte J
   assert.match(html, /VÄG/);
   assert.doesNotMatch(html, /aktbeteckning&quot;/);
   assert.doesNotMatch(html, /\{&quot;typ/);
+});
+
+
+test('renderResonemang: numrerad kedja med fråga, lagrum och svar', () => {
+  const noder = [
+    { fraga: { kod: 'resonemang.f7_inom_zon', params: {} }, lagrum: 'MB 7 kap. 13–14 §§', svar: 'inom' },
+    { fraga: { kod: 'resonemang.f7_preskription', params: {} }, lagrum: 'MÖD 2021:6', svar: false },
+    { fraga: { kod: 'resonemang.beslut', params: {} }, lagrum: 'PBL 11 kap.', svar: null }
+  ];
+  const html = renderResonemang(noder, t, 'sv');
+  assert.match(html, /Ligger byggnaden inom strandskyddszon\?/);
+  assert.match(html, /MÖD 2021:6/);
+  // Enum-svar översätts, boolean blir badge, beslutet är »Ej fastställt«.
+  assert.match(html, /Inom zon/);
+  assert.match(html, /gt-badge">Nej/);
+  assert.match(html, new RegExp(t.ejFaststallt.replace(/[»«]/g, '.')));
+  // På engelska byts frågespråket.
+  assert.match(renderResonemang(noder, TEXTS.en, 'en'), /Is the building inside a shoreline/);
+});
+
+test('renderCheckBody visar resonemanget som egen sektion', () => {
+  const data = { ...FALL3, resonemang: [
+    { fraga: { kod: 'resonemang.f3_lov_finns', params: {} }, lagrum: 'Lovarkiv', svar: true },
+    { fraga: { kod: 'resonemang.beslut', params: {} }, lagrum: 'PBL 11 kap.', svar: null }
+  ] };
+  const html = renderCheckBody(data, t, 'sv');
+  assert.match(html, /Resonemang/);
+  assert.match(html, /Finns ett beviljat lov/);
+  // Fältet får inte dessutom dyka upp som generisk rad i Fakta.
+  assert.doesNotMatch(html, /gt-rad__etikett">resonemang/);
 });

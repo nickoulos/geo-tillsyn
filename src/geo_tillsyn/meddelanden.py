@@ -285,6 +285,30 @@ _SV: dict[str, Callable[..., str]] = {
         f"Zonen är {area_km2} km² — radarn skannar högst {max_km2} km² åt gången; "
         "zooma in eller dela upp."
     ),
+    # --- resonemang.py: den juridiska kedjans frågor (svaren är rådata) ---
+    "resonemang.f7_inom_zon": lambda: "Ligger byggnaden inom strandskyddszon?",
+    "resonemang.f7_gallde_vid_uppforande": lambda: (
+        "Gällde strandskyddet när byggnaden uppfördes?"
+    ),
+    "resonemang.f7_dispens_idag": lambda: "Krävs dispens för åtgärder i dag?",
+    "resonemang.f7_preskription": lambda: "Preskriberas överträdelser av strandskyddet?",
+    "resonemang.f1_nar_uppford": lambda: "När uppfördes byggnaden, enligt bildserien?",
+    "resonemang.f1_forenligt_register": lambda: (
+        "Är dateringen förenlig med registrets nybyggnadsår?"
+    ),
+    "resonemang.f1_bygglov_kravdes": lambda: "Krävdes bygglov vid uppförandet?",
+    "resonemang.f1_lovbefrielse": lambda: "Gäller någon lovbefrielse?",
+    "resonemang.f1_klocka_rattelse": lambda: "Är rättelsekravet preskriberat?",
+    "resonemang.f1_klocka_sanktion": lambda: "Är sanktionsavgift fortfarande möjlig?",
+    "resonemang.f3_lov_finns": lambda: "Finns ett beviljat lov för byggnaden?",
+    "resonemang.f3_vilken_lag": lambda: "Vilken lag styr lovet?",
+    "resonemang.f3_korskontroll": lambda: (
+        "Stämmer den skannade handlingen med registerposten?"
+    ),
+    "resonemang.f3_avvikelse": lambda: "Hur stor är avvikelsen mot godkänt läge?",
+    "resonemang.f3_vasentlighet": lambda: "Är avvikelsen väsentlig eller ringa?",
+    "resonemang.f3_klockor": lambda: "Har PBL-klockorna löpt ut?",
+    "resonemang.beslut": lambda: "Beslut?",
     # --- server.py: HTTP-fel ---
     "server.parametrar_ogiltiga": lambda detalj: (
         f"easting/northing saknas eller kunde inte tolkas: {detalj}"

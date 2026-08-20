@@ -45,6 +45,65 @@ gäller oförändrat.
   annan session — se radar-dokumentationen för dess status, inte beskriven
   här.
 
+## Tillsynsradar (2026-08-19)
+
+Finalen i demomanuset (34:00–39:00) finns nu som kod — samma motor i
+skanningsläge över en yta i stället för en punkt:
+
+- **Backend:** `src/geo_tillsyn/radar.py` — `skanna_zon(bbox)` korsar alla
+  byggnader i rutan med strandskyddszonerna (klippta till rutan: 2 min 38 s →
+  7 s live), bedömer regimen vid uppförandet tidsmedvetet (`juridiskt_lage`)
+  och poängsätter enligt en **öppen modell** (läge +3/+2, strandskyddet gällde
+  vid uppförandet +3, år okänt +1, utvidgat +1; upphävt = källkonflikt, ±0).
+  Varje kandidat bär sina grunder; dispenser deklareras okontrollerade; beslutet
+  är handläggarens (`radar.juridisk_not`). Max 4 km² per skanning (deklarerat nej).
+- **MCP-verktyg** `skanna_strandskyddszon(min_e, min_n, max_e, max_n, max_kandidater=15)`
+  (Eneo) + **REST** `GET /api/radar?bbox=minE,minN,maxE,maxN[&max_kandidater=25]`
+  (EPSG:3014, CORS, 400 med meddelandekod vid för stor/ogiltig ruta).
+- **Plugin:** knappen **"Skanna vyn"** i panelhuvudet skannar den synliga
+  kartvyn, renderar en rangordnad kandidatlista (`src/radar.mjs`, SV/EN) och
+  ritar numrerade markörer som dyker upp en efter en; klick på en rad hoppar
+  dit och kör den vanliga ett-klicks-granskningen; "Till radarlistan" tar
+  tillbaka. `/api/health` räknar nu verktygen dynamiskt.
+- **Live-verifierat 2026-08-19** mot demozonen NW Alnö
+  (bbox 157843.7,6916367.7,159523.1,6918611.2): 826 byggnader, 271 kandidater,
+  topp 10 med poäng 6–7 — ALNÖ-USLAND 1:45 (båda byggnaderna) bland dem.
+
+## Resonemang — regelgraf i tunn form (2026-08-20)
+
+Svaret på "ingen svart låda" som UI: varje analysresultat bär nu ett
+`resonemang`-fält — den juridiska kedjan som nodlista (fråga, lagrum, svar),
+härledd ur redan beräknade fält i `src/geo_tillsyn/resonemang.py`. Ingen nod
+räknar något nytt; sista noden är alltid "Beslut?" med svaret »Ej fastställt«
+(handläggarens). Fall 1: datering → register → lovplikt → lovbefrielse →
+klockorna. Fall 3: lov → styrande lag → OCR-korskontroll → avvikelse →
+väsentlighet (alltid handläggarfråga) → klockor. Fall 7: zon → regim vid
+uppförandet → dispens → preskription (MÖD 2021:6). Kortet renderar kedjan som
+en numrerad "Resonemang"-sektion (SV/EN); additivt för MCP-verktygen.
+
+## Fallback-skärmdumpar + WMS-cache (2026-08-20)
+
+Demomanusets `fallback_akt1..3.png` + `fallback_radar.png` genereras headless:
+
+- **Harness:** `demo/fallback.html` (kopieras till `build/`) kör ett scenario
+  via query-parametrar: `?e=&n=` kartklick (EPSG:3006), `?zoom=`, `?mode=radar`
+  ("Skanna vyn"), `?ar=2007` (årgång efter resultat), `?fokus=<kort>` (scrolla),
+  `?oppna=1` (fäll upp Fakta), `?lang=en`, `?api=<port>`.
+- **Körning:** REST-servern + `npx http-server build -p 9977 -c-1 --cors`, sedan
+  `chrome --headless=new --window-size=1600,900 --virtual-time-budget=150000
+  --screenshot=<ut>.png "http://localhost:9977/fallback.html?..."`.
+  Skärmdumparna 2026-08-20 ligger i `demo_ut/fallback/` och i anbudsmappens
+  `fallbacks/`: Akt 1 (Uppförd 2001–2007 · registret 2014, år 2007 i tidslinjen),
+  Akt 2 (+90,3 m² +38,4 % · SBN 2009-0412, blå/röd överlagring), Akt 3
+  (28 av 73 · Preskriberas Nej per byggnad), Radar (71 kandidater av 252).
+- **WMS-bildcache** (`geodata.hamta_wms_robust`, disk-cache-först): historiska
+  ortofoton är oföränderliga och svaren byte-identiska (data-findings) — andra
+  klicket på samma byggnad går aldrig på nätet (52 s → 17 s varm; kvarvarande
+  tid är WFS live). Nästan tomma svar (WMS:ens tysta felläge) cachas aldrig.
+  Kör ett klick per demo-byggnad dagen före demon så överlever demot GeoServer-
+  hicka; `GEO_TILLSYN_OFFLINE=1` tvingar cache/snapshot.
+- REST-seamens interna fel loggas nu med traceback (`aldrig tyst`).
+
 ## v0.5 UX-redesign (2026-07-30)
 
 Handläggar-UX i stället för demopanel — samma backend, samma endpoints:

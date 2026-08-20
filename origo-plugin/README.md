@@ -13,6 +13,8 @@ strandskydd ur fastighetsperspektiv, ett eget Beslut-block); biografi-strip
 (`biografi.js`) under kartan ersätter den gamla tidslinjepillen med fyra spår
 — Verklighet/Register & lov/Rättighet/Klockor — över en gemensam 1960–2027-
 axel; kartan auto-zoomar och sätter en klickmarkör vid granskning; SV/EN.
+**Tillsynsradar** ("Skanna vyn"): `/api/radar` över synlig kartvy → rangordnad kandidatlista med öppen poängmodell + numrerade markörer; klick på kandidat = full granskning.
+
 Se `B-LIVE-STATUS.md` för körning, `npm test` för de rena modulerna och
 avsnittet **Verifieringssele** nedan för headless-skärmdumpar.
 

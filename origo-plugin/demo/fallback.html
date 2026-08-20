@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<!-- Fallback-harness: laddar demot och kör ett scenario styrt av query-parametrar,
+     för headless-skärmdumpar (demomanusets fallback_akt*.png). Ingår ej i bundlen.
+     ?e=&n=          kartklick (EPSG:3006)
+     ?zoom=          startzoom (default 13)
+     ?mode=radar     klicka "Skanna vyn" i stället för kartklick
+     ?ar=2007        välj årgång i tidslinjen efter resultat
+     ?fokus=lovavvikelse  scrolla panelen till ett kort när resultaten är klara
+     ?oppna=1        fäll upp det fokuserade kortets sektioner (Fakta m.m.)
+     ?botten=1       scrolla till kortets slut i stället för dess början
+     ?lang=en        växla språk
+     ?api=8478       REST-serverns port -->
+<html lang="sv">
+<head><meta charset="utf-8"><title>Geo-Tillsyn fallback</title><link href="css/style.css" rel="stylesheet"></head>
+<body>
+<div id="app-wrapper"></div>
+<script src="js/origo.js"></script>
+<script src="plugins/geotillsyn.min.js"></script>
+<script>
+var q = new URLSearchParams(location.search);
+var apiPort = q.get('api') || '8478';
+var origo = Origo('geotillsyn.json');
+origo.on('load', function (viewer) {
+  viewer.addComponent(GeoTillsyn({
+    owsUrl: 'https://karta.sundsvall.se/geoserver/ows',
+    fastighetLayer: 'SundsvallsKommun:Fastighet_yta',
+    apiUrl: 'http://localhost:' + apiPort
+  }));
+  var map = viewer.getMap();
+
+  function kartklick(e, n) {
+    map.dispatchEvent({
+      type: 'singleclick', coordinate: [e, n],
+      pixel: map.getPixelFromCoordinate([e, n]),
+      map: map, originalEvent: new MouseEvent('click')
+    });
+  }
+
+  setTimeout(function () {
+    if (q.get('lang') === 'en') {
+      var spr = document.querySelector('.gt-sprak');
+      if (spr) spr.click();
+    }
+    var e = parseFloat(q.get('e'));
+    var n = parseFloat(q.get('n'));
+    if (isFinite(e) && isFinite(n)) {
+      map.getView().setCenter([e, n]);
+      map.getView().setZoom(parseInt(q.get('zoom') || '13', 10));
+    }
+    setTimeout(function () {
+      if (q.get('mode') === 'radar') {
+        var knapp = document.querySelector('.gt-radarknapp');
+        if (knapp) knapp.click();
+      } else if (isFinite(e) && isFinite(n)) {
+        kartklick(e, n);
+      }
+      var ar = q.get('ar');
+      var fokus = q.get('fokus');
+      if (ar || fokus) {
+        // Vänta tills korten fått innehåll (skelett borta) innan efterstegen.
+        var forsok = 0;
+        var timer = setInterval(function () {
+          forsok += 1;
+          var kvar = document.querySelectorAll('.gt-skelett').length;
+          if (kvar === 0 || forsok > 40) {
+            clearInterval(timer);
+            if (ar) {
+              var slider = document.querySelector('.gt-tidslinje input[type="range"]');
+              if (slider) {
+                slider.value = ar;
+                slider.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+            }
+            if (fokus) {
+              var kort = document.querySelector('.gt-kort[data-check="' + fokus + '"]');
+              if (kort) {
+                if (q.get('oppna')) {
+                  kort.querySelectorAll('details').forEach(function (d) { d.open = true; });
+                }
+                kort.scrollIntoView({ block: q.get('botten') ? 'end' : 'start' });
+              }
+            }
+          }
+        }, 1000);
+      }
+    }, 2500);
+  }, 3000);
+});
+</script>
+</body>
+</html>

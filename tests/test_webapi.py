@@ -29,11 +29,12 @@ def client():
         yield c
 
 
-def test_health_returns_sju_verktyg(client):
+def test_health_raknar_registrerade_verktyg(client):
     r = client.get("/api/health")
 
     assert r.status_code == 200
-    # strandskydd, dossier, olovligt, lovavvikelse, bygglovsärenden, snedbilder, radar
+    # strandskydd, dossier, olovligt, lovavvikelse, bygglovsärenden, snedbilder,
+    # radar — räknas dynamiskt så nya verktyg aldrig lämnar kontrollen inaktuell.
     assert r.json() == {"status": "ok", "tools": 7}
     assert r.headers["access-control-allow-origin"] == "*"
 

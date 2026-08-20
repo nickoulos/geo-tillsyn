@@ -18,7 +18,7 @@ from shapely.geometry import Point, mapping, shape
 from geo_tillsyn.analysis import analysera_strandskydd, komplettera_med_regellager
 from geo_tillsyn.datering import datera_byggnad
 from geo_tillsyn.delta import jamfor_lage
-from geo_tillsyn.dossier import Fakta, Kalla, render_markdown
+from geo_tillsyn.dossier import Fakta, Kalla, render_klarsprak, render_markdown
 from geo_tillsyn.fall1 import bygg_fall1_dossier
 from geo_tillsyn.fall3 import bygg_fall3_dossier
 from geo_tillsyn.fall7 import bygg_dossier
@@ -27,6 +27,7 @@ from geo_tillsyn.juridik import fall1_lage, fall3_lage, juridiskt_lage
 from geo_tillsyn.lovarkiv import hitta_lov
 from geo_tillsyn.lovtolk import korsjamfor, tolka_handling
 from geo_tillsyn.meddelanden import Meddelande as M
+from geo_tillsyn.resonemang import resonemang_fall1, resonemang_fall3, resonemang_fall7
 from geo_tillsyn import snedbild as _snedbild
 from geo_tillsyn.timeline import hamta_tidslinje
 
@@ -313,6 +314,9 @@ def analysera_punkt(
         ],
         "hamtad": nu,
     }
+    if traffar:
+        # Kedjan för den första träffen — närmast klicket efter sorteringen.
+        resultat["resonemang"] = resonemang_fall7(traffar[0])
     if len(traff_analyser) > _MAX_TRAFFAR_I_SVAR:
         resultat["traffar_trunkerade_till"] = _MAX_TRAFFAR_I_SVAR
     return resultat
@@ -417,6 +421,10 @@ def kor_fall7(
 
     dossier_fil = ut_katalog / "dossier.md"
     dossier_fil.write_text(md, encoding="utf-8")
+    # Samma underlag i klarspråk för berörd part — två vyer, en sanning.
+    (ut_katalog / "dossier_klarsprak.md").write_text(
+        render_klarsprak(dossier), encoding="utf-8"
+    )
     return dossier_fil
 
 
@@ -694,6 +702,10 @@ def kor_fall1(
 
     dossier_fil = ut_katalog / "fall1_dossier.md"
     dossier_fil.write_text(md, encoding="utf-8")
+    # Samma underlag i klarspråk för berörd part — två vyer, en sanning.
+    (ut_katalog / "fall1_dossier_klarsprak.md").write_text(
+        render_klarsprak(dossier), encoding="utf-8"
+    )
     return dossier_fil
 
 
@@ -730,7 +742,7 @@ def analysera_fall1_punkt(
 
     osakerheter = list(datering.anmarkningar) + list(lage.atgarder) + list(underlag["osakerheter"])
 
-    return {
+    resultat = {
         "byggnad_id": underlag["byggnad_id"],
         "punkt": {"easting": punkt[0], "northing": punkt[1], "crs": CRS},
         "area_m2": round(underlag["area_m2"], 1),
@@ -761,6 +773,8 @@ def analysera_fall1_punkt(
         ],
         "hamtad": nu,
     }
+    resultat["resonemang"] = resonemang_fall1(resultat)
+    return resultat
 
 
 # Prototype honesty: the lov archive is a SYNTETISKT mock-ByggR testarkiv, not
@@ -1076,6 +1090,10 @@ def kor_fall3(
 
     dossier_fil = ut_katalog / "fall3_dossier.md"
     dossier_fil.write_text(md, encoding="utf-8")
+    # Samma underlag i klarspråk för berörd part — två vyer, en sanning.
+    (ut_katalog / "fall3_dossier_klarsprak.md").write_text(
+        render_klarsprak(dossier), encoding="utf-8"
+    )
     return dossier_fil
 
 
@@ -1103,7 +1121,7 @@ def analysera_fall3_punkt(
     )
 
     if underlag["lov"] is None:
-        return {
+        resultat = {
             "lov_hittat": False,
             "byggnad_id": underlag["byggnad_id"],
             "punkt": {"easting": punkt[0], "northing": punkt[1], "crs": CRS},
@@ -1111,6 +1129,8 @@ def analysera_fall3_punkt(
             "osakerheter": [_LOVARKIV_OSAKERHET],
             "hamtad": nu,
         }
+        resultat["resonemang"] = resonemang_fall3(resultat)
+        return resultat
 
     lov = underlag["lov"]
     delta = underlag["delta"]
@@ -1129,7 +1149,7 @@ def analysera_fall3_punkt(
     def _r(x):
         return round(x, 1) if x is not None else None
 
-    return {
+    resultat = {
         "byggnad_id": underlag["byggnad_id"],
         "punkt": {"easting": punkt[0], "northing": punkt[1], "crs": CRS},
         "lov_hittat": True,
@@ -1174,6 +1194,8 @@ def analysera_fall3_punkt(
         ],
         "hamtad": nu,
     }
+    resultat["resonemang"] = resonemang_fall3(resultat)
+    return resultat
 
 
 def _snedbilder_kompakt(snedbilder: dict) -> dict:

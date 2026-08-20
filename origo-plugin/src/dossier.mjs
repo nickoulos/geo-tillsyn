@@ -13,7 +13,7 @@ import { faltLabel, meddelandeText, teckenTal, vardeLabel } from './i18n.mjs';
 // och alltså inte ska upprepas generiskt i Fakta/Bedömning-listorna.
 const HOPPA_OVER = new Set(['kallor', 'osakerheter', 'meddelande', 'fel', 'hamtad',
   'punkt', 'traffar', 'juridisk_not', 'korsjamforelse', 'lov_hittat', 'rattigheter',
-  'snedbilder']);
+  'snedbilder', 'resonemang']);
 
 // Fält som hör hemma under "Bedömning" (juridisk tolkning) snarare än
 // "Fakta" (rådata/mätvärden). Allt annat okänt fält hamnar i Fakta.
@@ -214,6 +214,27 @@ export function underlagsLage(checkKey, data, status) {
   return 'finns';
 }
 
+/**
+ * Resonemangskedjan: fråga -> lagrum -> svar, i den ordning motorn gick.
+ * Svaren är rådata (bool/str/null) och renderas som badge/text/»Ej fastställt«;
+ * sista noden är alltid beslutet, vars svar aldrig kommer från backend.
+ */
+export function renderResonemang(noder, t, sprak) {
+  if (!Array.isArray(noder) || noder.length === 0) return '';
+  const steg = noder.map((nod, i) => {
+    const fraga = escapeHtml(meddelandeText(nod.fraga, sprak));
+    const svar = formatVarde(nod.svar === undefined ? null : nod.svar, t, sprak,
+      typeof nod.svar === 'string' ? 'laege' : undefined);
+    return `<li class="gt-kedja__steg">
+      <span class="gt-kedja__nr">${i + 1}</span>
+      <span class="gt-kedja__innehall"><span class="gt-kedja__fraga">${fraga}</span>
+        <span class="gt-kedja__lagrum">${escapeHtml(nod.lagrum || '')}</span></span>
+      <span class="gt-kedja__svar">${svar}</span>
+    </li>`;
+  }).join('');
+  return `<ol class="gt-kedja">${steg}</ol>`;
+}
+
 export function renderCheckBody(data, t, sprak) {
   if (data.meddelande) {
     return `<div class="gt-info">${escapeHtml(meddelandeText(data.meddelande, sprak))}</div>`
@@ -257,7 +278,9 @@ export function renderCheckBody(data, t, sprak) {
     `<details class="gt-sektion"${oppen ? ' open' : ''}><summary>${escapeHtml(rubrik)}</summary>`
     + `<div class="gt-sektion__inner">${inre || '<div class="gt-info">—</div>'}</div></details>`;
 
+  const resonemang = renderResonemang(data.resonemang, t, sprak);
   return renderOsakerheter(data.osakerheter, t, sprak, true)
     + sektion(t.fakta, fakta.join('') + renderKallor(data.kallor, t, sprak), false)
-    + sektion(t.bedomning, bedomning.join(''), true);
+    + sektion(t.bedomning, bedomning.join(''), true)
+    + (resonemang ? sektion(t.resonemang, resonemang, false) : '');
 }
