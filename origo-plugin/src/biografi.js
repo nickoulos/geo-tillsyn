@@ -51,6 +51,17 @@ const KOLLAPSAD_H = 40;
 // allt annat namn (friggebod, komplementbyggnad, okänt) hamnar i rad A.
 const RAD_B_NAMN = new Set(['attefallshus', 'komplementbostadshus']);
 
+// Kortnamn för lovbefrielseetiketten när den fulla "<namn> <m²> m²" inte får
+// plats i den egna stapeln (V6/task 6) — särskilt rad B: attefallshus-
+// staplarna är bara ~5-6 år breda och fick tidigare ALDRIG synlig text, bara
+// en title-tooltip. Kortformen tappar "m²" och förkortar bara namn som
+// faktiskt är för långa; okänt namn faller tillbaka på sig självt.
+const LOVBEFRIELSE_KORTNAMN = {
+  attefallshus: 'attefall',
+  komplementbostadshus: 'kompl.bostad',
+  komplementbyggnad: 'kompl.byggnad'
+};
+
 const CHEVRON = '<svg class="gt-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>';
 
 function el(tag, attrs = {}, ns = SVG_NS) {
@@ -339,18 +350,29 @@ export function skapaBiografi({ years, startAr, regler, t, sprak, onArByte, onRe
       const rad = RAD_B_NAMN.has(b.namn) ? radLovB : radLovA;
       const x1 = skala(b.fran);
       const x2 = b.till ? skala(b.till) : bredd;
+      const staplbredd = Math.max(0, x2 - x1);
+      // 1 px vit rand mellan intilliggande staplar i samma rad (task 6/B) —
+      // två perioder med samma fyllnadsfärg (t.ex. friggebod 1979-2007 och
+      // 2008-2025) möttes annars kant i kant och lästes som EN stapel.
       const rect = el('rect', {
-        x: x1, y: rad.top, width: Math.max(0, x2 - x1), height: rad.h, class: 'gt-bio-lovbefrielse'
+        x: x1, y: rad.top, width: staplbredd, height: rad.h, class: 'gt-bio-lovbefrielse'
       });
-      const etikett = `${b.namn} ${b.max_kvm} m²`;
-      rect.appendChild(titel(etikett));
+      const etikettFull = `${b.namn} ${b.max_kvm} m²`;
+      rect.appendChild(titel(etikettFull));
       lager.appendChild(rect);
-      // Text bara om den faktiskt får plats i den egna stapeln — annars
-      // räcker title (V5). Ett fast 60 px-tak (utan hänsyn till textens
-      // egen bredd) lät långa etiketter ("attefallshus 30 m²") svämma över
-      // i grannstapeln vid smalare fönster; måttet görs därför dynamiskt.
-      if (x2 - x1 >= textbredd(etikett, 10.5) + 10) {
-        skrivText(lager, etikett, x1 + 4, rad.top + rad.h - 4,
+      // Text i tre steg (task 6/B): fullt namn -> kort namn utan "m²" ->
+      // ingen synlig text (bara title-tooltip). Rad B (attefallshus/
+      // komplementbostadshus) är ofta bara några år bred och fick tidigare
+      // aldrig någon synlig etikett alls, bara den dolda title-texten.
+      const etikettKort = `${LOVBEFRIELSE_KORTNAMN[b.namn] || b.namn} ${b.max_kvm}`;
+      let visadEtikett = null;
+      if (staplbredd >= textbredd(etikettFull, 10.5) + 10) {
+        visadEtikett = etikettFull;
+      } else if (staplbredd >= textbredd(etikettKort, 10.5) + 8) {
+        visadEtikett = etikettKort;
+      }
+      if (visadEtikett) {
+        skrivText(lager, visadEtikett, x1 + 4, rad.top + rad.h - 4,
           'gt-bio-etikett gt-bio-etikett--lov gt-bio-etikett--inuti', 'start');
       }
     });

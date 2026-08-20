@@ -342,7 +342,7 @@ export function cssText() {
 /* ---------- spår 3: Rättighet ---------- */
 .gt-bio-lagband { fill: var(--gt-accent-ljus); opacity: .45; }
 .gt-bio-lagband--aktiv { opacity: 1; }
-.gt-bio-lovbefrielse { fill: var(--gt-accent-mork); opacity: .85; }
+.gt-bio-lovbefrielse { fill: var(--gt-accent-mork); opacity: .85; stroke: #fff; stroke-width: 1; }
 .gt-bio-strandskydd { fill: rgba(40,150,120,.16); stroke: rgba(40,150,120,.5); stroke-width: 1; }
 
 /* ---------- spår 4: Klockor ---------- */

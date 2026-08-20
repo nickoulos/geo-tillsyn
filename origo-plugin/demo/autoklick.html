@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+	<title>Geo-Tillsyn — autoklick-sele (Sundsvall)</title>
+	<link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+<div id="app-wrapper">
+</div>
+<script src="js/origo.js"></script>
+<script src="plugins/geotillsyn.min.js"></script>
+<script type="text/javascript">
+	// Verifieringssele för v0.7 (task 6) — INTE en del av bundlen (byggs inte
+	// av webpack, kopieras bara in i build/ inför headless-körningar). Samma
+	// bootstrapping som index.html, plus:
+	//   ?e=&n=   klickpunkt i SWEREF 99 TM / EPSG:3006 (default: komplement-
+	//            byggnaden E 624526.3 N 6917930.0 — samma punkt som teamets
+	//            manuella körningar hittills).
+	//   ?lang=en klickar språkknappen (.gt-sprak) direkt efter komponenten
+	//            laddats, INNAN kartklicket — så hela flödet (auto-zoom,
+	//            panelrendering) sker på engelsk UI-text.
+	// ?radar=1 hanteras medvetet INTE här — tillsynsradarns egen sele ägs av
+	// den andra sessionen (radar.mjs); den här filen rör bara karta+panel.
+	var params = new URLSearchParams(window.location.search);
+	var e = parseFloat(params.get('e'));
+	var n = parseFloat(params.get('n'));
+	if (!isFinite(e)) e = 624526.3;
+	if (!isFinite(n)) n = 6917930.0;
+	var lang = params.get('lang');
+
+	var origo = Origo('geotillsyn.json');
+	origo.on('load', function (viewer) {
+		viewer.addComponent(GeoTillsyn({
+			owsUrl: 'https://karta.sundsvall.se/geoserver/ows',
+			fastighetLayer: 'SundsvallsKommun:Fastighet_yta',
+			apiUrl: 'http://localhost:8464'
+		}));
+
+		if (lang === 'en') {
+			// Panelens rubrikrad (inkl. .gt-sprak) finns direkt vid render,
+			// oberoende av tomläge/kort — inget behov att vänta på ett klick.
+			var sprakKnapp = document.querySelector('.gt-sprak');
+			if (sprakKnapp) sprakKnapp.click();
+		}
+
+		setTimeout(function () {
+			var map = viewer.getMap();
+			var c = [e, n];
+			map.getView().setCenter(c);
+			map.getView().setZoom(13);
+			setTimeout(function () {
+				map.dispatchEvent({
+					type: 'singleclick',
+					coordinate: c,
+					pixel: map.getPixelFromCoordinate(c),
+					map: map,
+					originalEvent: new MouseEvent('click')
+				});
+			}, 1500);
+		}, 2500);
+	});
+</script>
+</body>
+</html>
