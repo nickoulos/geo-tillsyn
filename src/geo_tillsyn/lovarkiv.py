@@ -11,6 +11,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 from __future__ import annotations
 
 import json
+import re
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -107,9 +109,6 @@ def hitta_lov(
 # BYA, höjd, godkänt läge) — det ligger i handlingarna. Mocken behåller därför
 # de uppgifterna under `_geoTillsynMock`, tydligt markerat, så att ingen
 # förväxlar dem med fält som tjänsten levererar.
-
-import re
-import zlib
 
 _TRAKT_NR_RE = re.compile(r"^(?P<trakt>.+?)\s+(?P<nr>\d+:\d+)$")
 
