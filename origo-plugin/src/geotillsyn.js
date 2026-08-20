@@ -6,6 +6,7 @@ import { renderRadarLista, renderRadarRubrik, bboxFranExtent } from './radar.mjs
 import { injectStyles } from './styles.mjs';
 import { skapaPanel } from './panel.js';
 import { skapaBiografi } from './biografi.js';
+import { paddingForFit, fallbackExtent, AUTOZOOM_DURATION } from './karta-logik.mjs';
 
 /**
  * Geo-Tillsyn Origo plugin.
@@ -79,9 +80,21 @@ const CHECKS = [
   { key: 'strandskydd', path: '/api/strandskydd', radie: 150 }
 ];
 
+// Tillsynslagret som tänds automatiskt när vald byggnad ligger inom/delvis
+// inom strandskyddszonen (demo/geotillsyn.json) — pluginet slår aldrig av det
+// själv, bara på: användaren behåller kontrollen över lagerlistan.
+const STRANDSKYDD_LAGER = 'Lansstyrelsen:Strandskydd_yta';
+
 // Overlay-färgerna (godkänt/verkligt läge) delas av kartlagret och legenden.
-const FARG_GODKANT = 'rgba(40,80,255,1)';
+// Godkänt matchar --gt-accent (#1e4ed8) i styles.mjs; verkligt behåller sin
+// tidigare röd som stroke, halvtransparent som fyllning.
+const FARG_GODKANT = '#1e4ed8';
+const FARG_GODKANT_FYLLNING = 'rgba(30,78,216,0.18)';
 const FARG_VERKLIG = 'rgba(230,40,40,1)';
+const FARG_VERKLIG_FYLLNING = 'rgba(200,40,40,0.18)';
+
+// Klickmarkören: ring med vit halo + prick, samma accentfärg som overlayen.
+const FARG_KLICK = '#1e4ed8';
 
 const GeoTillsyn = function GeoTillsyn(options = {}) {
   const {
@@ -118,8 +131,15 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
   const laddandeChecks = new Set();
   let overlayLayer = null;
   let radarLayer = null;
+  let klickLayer = null;
   let senasteRadar = null;
   let radarTimers = [];
+  // Kartans egen koordinat (samma CRS som view/fit) för det senaste klicket —
+  // används av auto-zoomens 80 m-fallback när ingen overlay ritas.
+  let senasteKlickKarta = null;
+  // Auto-zoom får bara hända en gång per klick: språkbyten och andra
+  // omritningar av samma svar ska inte rycka undan kartvyn under läsaren.
+  let harAutozoomatFörKlick = false;
 
   function t() {
     return TEXTS[aktivtSprak];
@@ -247,6 +267,65 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     if (overlayLayer) overlayLayer.getSource().clear();
   }
 
+  /* --- auto-zoom: en gång per klick, till overlägget eller en 80 m-ruta --- */
+
+  // Faktisk fit() — guardad så bara det första svaret för ett klick får flytta
+  // vyn (språkbyten och andra omritningar av samma data ska stå still).
+  function autoZoomTillExtent(extent) {
+    if (harAutozoomatFörKlick) return;
+    const ol = getOl();
+    const map = viewer && viewer.getMap();
+    if (!ol || !map || !extent) return;
+    if (!isFinite(extent[0]) || !isFinite(extent[1]) || !isFinite(extent[2]) || !isFinite(extent[3])) return;
+    harAutozoomatFörKlick = true;
+    map.getView().fit(extent, {
+      padding: paddingForFit(!kollapsad),
+      duration: AUTOZOOM_DURATION
+    });
+  }
+
+  // 80 m-ruta runt klickpunkten (kartans CRS) — fallback när ingen overlägg-
+  // geometri kunde ritas (404/fel/inget lov).
+  function autoZoomTillPunkt() {
+    if (harAutozoomatFörKlick) return;
+    if (!senasteKlickKarta) return;
+    autoZoomTillExtent(fallbackExtent(senasteKlickKarta));
+  }
+
+  /* --- klickmarkör: ring + prick på senaste klickpunkten --- */
+
+  function klickMarkorStil(ol) {
+    return [
+      new ol.style.Style({
+        image: new ol.style.Circle({
+          radius: 9,
+          stroke: new ol.style.Stroke({ color: '#ffffff', width: 4 })
+        })
+      }),
+      new ol.style.Style({
+        image: new ol.style.Circle({
+          radius: 9,
+          stroke: new ol.style.Stroke({ color: FARG_KLICK, width: 2 })
+        })
+      }),
+      new ol.style.Style({
+        image: new ol.style.Circle({
+          radius: 2.5,
+          fill: new ol.style.Fill({ color: FARG_KLICK })
+        })
+      })
+    ];
+  }
+
+  function ritaKlickMarkor(coordinate) {
+    const ol = getOl();
+    if (!ol || !klickLayer) return;
+    klickLayer.getSource().clear();
+    const feature = new ol.Feature({ geometry: new ol.geom.Point(coordinate) });
+    feature.setStyle(klickMarkorStil(ol));
+    klickLayer.getSource().addFeature(feature);
+  }
+
   function visaLegend(visa) {
     if (!legendEl) return;
     legendEl.hidden = !visa;
@@ -265,21 +344,22 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     clearOverlay();
     visaLegend(false);
     if (!ol || !overlayLayer) return;
-    if (!geometriData.lov_hittat) return;
+    if (!geometriData.lov_hittat) { autoZoomTillPunkt(); return; }
     if (!epsg3014Registrerad) {
       console.error('geotillsyn: EPSG:3014 ej registrerad — Fall 3-overlay ritas inte.');
+      autoZoomTillPunkt();
       return;
     }
 
     const featureProjection = viewer.getProjection().getCode();
     const format = new ol.format.GeoJSON();
     const lager = [
-      { geom: geometriData.godkant_lage, farg: FARG_GODKANT, etikett: t().godkantLage },
-      { geom: geometriData.verkligt_lage, farg: FARG_VERKLIG, etikett: t().verkligtLage }
+      { geom: geometriData.godkant_lage, farg: FARG_GODKANT, fyllning: FARG_GODKANT_FYLLNING, etikett: t().godkantLage },
+      { geom: geometriData.verkligt_lage, farg: FARG_VERKLIG, fyllning: FARG_VERKLIG_FYLLNING, etikett: t().verkligtLage }
     ];
 
     let nagotRitat = false;
-    lager.forEach(({ geom, farg, etikett }) => {
+    lager.forEach(({ geom, farg, fyllning, etikett }) => {
       if (!geom) return;
       let features;
       try {
@@ -294,7 +374,7 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       features.forEach((feature) => {
         feature.setStyle(new ol.style.Style({
           stroke: new ol.style.Stroke({ color: farg, width: 3 }),
-          fill: new ol.style.Fill({ color: farg.replace(',1)', ',0.08)') }),
+          fill: new ol.style.Fill({ color: fyllning }),
           text: new ol.style.Text({
             text: etikett,
             font: 'bold 12px sans-serif',
@@ -308,6 +388,11 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       if (features.length) nagotRitat = true;
     });
     visaLegend(nagotRitat);
+    if (nagotRitat) {
+      autoZoomTillExtent(overlayLayer.getSource().getExtent());
+    } else {
+      autoZoomTillPunkt();
+    }
   }
 
   async function hamtaFall3Geometri(e3014, n3014, radie) {
@@ -318,11 +403,13 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       const json = await resp.json();
       if (!resp.ok) {
         console.error('geotillsyn: /api/lovavvikelse/geometri gav fel', json);
+        autoZoomTillPunkt();
         return;
       }
       ritaFall3Overlay(json);
     } catch (err) {
       console.error('geotillsyn: fetch mot /api/lovavvikelse/geometri misslyckades', err);
+      autoZoomTillPunkt();
     }
   }
 
@@ -363,6 +450,16 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     const ss = senasteData.strandskydd;
     if (!ss || !ss.traffar || ss.vald_byggnad_id == null) return null;
     return ss.traffar.find((traff) => traff.byggnad_id === ss.vald_byggnad_id) || null;
+  }
+
+  // Tänder Tillsynslagret Strandskydd_yta när vald byggnad faktiskt berör
+  // zonen (inom/delvis) — släcks aldrig härifrån: lagerlistan är annars
+  // användarens egen, och ett kort som inte berör zonen ska inte skymma den.
+  function visaZonlagerOmRelevant() {
+    const traff = valdStrandskyddTraff();
+    if (!traff || (traff.laege !== 'inom' && traff.laege !== 'delvis')) return;
+    const lager = hittaLager(STRANDSKYDD_LAGER);
+    if (lager) lager.setVisible(true);
   }
 
   // Sammanfattningschipsen: ett underlagsläge per kontroll (aldrig ett utfall),
@@ -419,6 +516,9 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       console.error(`geotillsyn: ${check.path} misslyckades`, err);
       laddandeChecks.delete(check.key);
       visaStatus(check.key, { typ: 'fel' });
+      // Nätverksfelet stoppar hela kedjan (geometri-hämtningen sker aldrig) —
+      // utan fallbacken skulle kartan aldrig zooma alls när backend är nere.
+      if (check.key === 'lovavvikelse') autoZoomTillPunkt();
       return;
     }
     if (status === 404 && data && data.fel) {
@@ -428,6 +528,7 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       if (check.key === 'lovavvikelse') {
         clearOverlay();
         visaLegend(false);
+        autoZoomTillPunkt();
       }
       return;
     }
@@ -437,6 +538,7 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
         typ: 'fel',
         text: (data && data.fel) || `HTTP ${status}`
       });
+      if (check.key === 'lovavvikelse') autoZoomTillPunkt();
       return;
     }
     laddandeChecks.delete(check.key);
@@ -450,8 +552,10 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       } else {
         clearOverlay();
         visaLegend(false);
+        autoZoomTillPunkt();
       }
     }
+    if (check.key === 'strandskydd') visaZonlagerOmRelevant();
   }
 
   /* --- snedbilder (MapSpace) via backend-proxy: /api/snedbild + /api/snedbild/bild --- */
@@ -624,10 +728,14 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
     // evt.coordinate är i kartans egen projektion (SWEREF 99 TM / EPSG:3006,
     // se geotillsyn.json) — samma koordinat som "Granskad punkt"-raden visar.
     panel.startaAnalys(evt.coordinate);
+    senasteKlickKarta = evt.coordinate;
+    harAutozoomatFörKlick = false;
+    ritaKlickMarkor(evt.coordinate);
     identify(evt);
     const punkt = transformTill3014(evt.coordinate);
     if (!punkt) {
       CHECKS.forEach((c) => visaStatus(c.key, { typ: 'fel', suffix: ' (EPSG:3014)' }));
+      autoZoomTillPunkt();
       return;
     }
     senastePunkt3014 = punkt;
@@ -646,6 +754,19 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       zIndex: 50
     });
     viewer.getMap().addLayer(overlayLayer);
+  }
+
+  // Klickmarkören (ring + prick) — eget lager, över Fall 3-overlayen så den
+  // aldrig göms bakom skraffering.
+  function initKlickLayer() {
+    const ol = getOl();
+    if (!ol) return;
+    klickLayer = new ol.layer.Vector({
+      source: new ol.source.Vector(),
+      name: 'geotillsyn-klick',
+      zIndex: 52
+    });
+    viewer.getMap().addLayer(klickLayer);
   }
 
   /* --- biografi-stripen: årsstyrt ortofotolager + regelverkskontext --- */
@@ -768,6 +889,7 @@ const GeoTillsyn = function GeoTillsyn(options = {}) {
       registreraEpsg3014();
       initOverlayLayer();
       initRadarLayer();
+      initKlickLayer();
       viewer.getMap().on('singleclick', pahandlaKlick);
 
       // Biografi-stripens Rättighet-spår läser regler.json vid varje ritning

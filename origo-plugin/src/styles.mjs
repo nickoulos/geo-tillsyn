@@ -372,7 +372,7 @@ export function cssText() {
 .gt-legend { position: absolute; bottom: calc(var(--gt-biografi-hojd, 296px) + 1.1rem); left: 1.1rem; z-index: 39;
   display: flex; gap: .8rem; align-items: center;
   background: var(--gt-yta); border: 1px solid var(--gt-kant); border-radius: 8px;
-  box-shadow: var(--gt-skugga); padding: .35rem .7rem; font-size: 12px; }
+  box-shadow: var(--gt-skugga); padding: .35rem .7rem; font-size: 13px; }
 .gt-legend[hidden] { display: none; }
 .gt-legend__prov { display: inline-block; width: 14px; height: 3px; border-radius: 2px;
   margin-right: .35rem; vertical-align: middle; }
