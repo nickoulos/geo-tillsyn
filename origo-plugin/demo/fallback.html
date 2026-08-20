@@ -7,6 +7,7 @@
      ?ar=2007        välj årgång i tidslinjen efter resultat
      ?fokus=lovavvikelse  scrolla panelen till ett kort när resultaten är klara
      ?oppna=1        fäll upp det fokuserade kortets sektioner (Fakta m.m.)
+     ?botten=1       scrolla till kortets slut i stället för dess början
      ?lang=en        växla språk
      ?api=8478       REST-serverns port -->
 <html lang="sv">
@@ -76,7 +77,7 @@ origo.on('load', function (viewer) {
                 if (q.get('oppna')) {
                   kort.querySelectorAll('details').forEach(function (d) { d.open = true; });
                 }
-                kort.scrollIntoView({ block: 'start' });
+                kort.scrollIntoView({ block: q.get('botten') ? 'end' : 'start' });
               }
             }
           }

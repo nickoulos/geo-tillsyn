@@ -27,6 +27,7 @@ from geo_tillsyn.juridik import fall1_lage, fall3_lage, juridiskt_lage
 from geo_tillsyn.lovarkiv import hitta_lov
 from geo_tillsyn.lovtolk import korsjamfor, tolka_handling
 from geo_tillsyn.meddelanden import Meddelande as M
+from geo_tillsyn.resonemang import resonemang_fall1, resonemang_fall3, resonemang_fall7
 from geo_tillsyn import snedbild as _snedbild
 from geo_tillsyn.timeline import hamta_tidslinje
 
@@ -233,6 +234,9 @@ def analysera_punkt(
         ],
         "hamtad": nu,
     }
+    if traffar:
+        # Kedjan för den första träffen — närmast klicket efter sorteringen.
+        resultat["resonemang"] = resonemang_fall7(traffar[0])
     if len(traff_analyser) > _MAX_TRAFFAR_I_SVAR:
         resultat["traffar_trunkerade_till"] = _MAX_TRAFFAR_I_SVAR
     return resultat
@@ -637,7 +641,7 @@ def analysera_fall1_punkt(
 
     osakerheter = list(datering.anmarkningar) + list(lage.atgarder) + list(underlag["osakerheter"])
 
-    return {
+    resultat = {
         "byggnad_id": underlag["byggnad_id"],
         "punkt": {"easting": punkt[0], "northing": punkt[1], "crs": CRS},
         "area_m2": round(underlag["area_m2"], 1),
@@ -666,6 +670,8 @@ def analysera_fall1_punkt(
         ],
         "hamtad": nu,
     }
+    resultat["resonemang"] = resonemang_fall1(resultat)
+    return resultat
 
 
 # Prototype honesty: the lov archive is a SYNTETISKT mock-ByggR testarkiv, not
@@ -1012,7 +1018,7 @@ def analysera_fall3_punkt(
     )
 
     if underlag["lov"] is None:
-        return {
+        resultat = {
             "lov_hittat": False,
             "byggnad_id": underlag["byggnad_id"],
             "punkt": {"easting": punkt[0], "northing": punkt[1], "crs": CRS},
@@ -1020,6 +1026,8 @@ def analysera_fall3_punkt(
             "osakerheter": [_LOVARKIV_OSAKERHET],
             "hamtad": nu,
         }
+        resultat["resonemang"] = resonemang_fall3(resultat)
+        return resultat
 
     lov = underlag["lov"]
     delta = underlag["delta"]
@@ -1038,7 +1046,7 @@ def analysera_fall3_punkt(
     def _r(x):
         return round(x, 1) if x is not None else None
 
-    return {
+    resultat = {
         "byggnad_id": underlag["byggnad_id"],
         "punkt": {"easting": punkt[0], "northing": punkt[1], "crs": CRS},
         "lov_hittat": True,
@@ -1083,6 +1091,8 @@ def analysera_fall3_punkt(
         ],
         "hamtad": nu,
     }
+    resultat["resonemang"] = resonemang_fall3(resultat)
+    return resultat
 
 
 def _snedbilder_kompakt(snedbilder: dict) -> dict:

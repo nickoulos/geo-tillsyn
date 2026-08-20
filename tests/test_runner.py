@@ -191,3 +191,16 @@ def test_kor_fall7_skriver_aven_klarspraksvyn(tmp_path):
     assert "inte ett beslut" in text
     # Ordlistan förklarar strandskydd — termen förekommer alltid i Fall 7.
     assert "**strandskydd**" in text
+
+
+def test_analysera_punkt_bar_resonemangskedja_for_forsta_traffen():
+    from geo_tillsyn.runner import analysera_punkt
+
+    resultat = analysera_punkt(
+        OWS, punkt=(15.0, 15.0), radie_m=100.0,
+        nu="2026-08-20T10:00:00Z", hamta_wfs=_fejk_wfs,
+    )
+    kedja = resultat["resonemang"]
+    assert [n["fraga"].kod for n in kedja][-1] == "resonemang.beslut"
+    assert kedja[-1]["svar"] is None
+    assert kedja[0]["svar"] in ("inom", "delvis")

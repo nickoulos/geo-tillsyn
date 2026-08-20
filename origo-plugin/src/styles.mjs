@@ -183,6 +183,19 @@ export function cssText() {
 .gt-kallor a { color: var(--gt-accent); text-decoration: none; }
 .gt-kallor a:hover { text-decoration: underline; }
 
+/* ---------- resonemangskedjan ---------- */
+.gt-kedja { list-style: none; margin: 0; padding: 0; }
+.gt-kedja__steg { display: flex; align-items: baseline; gap: .5rem;
+  padding: .3rem 0; border-bottom: 1px dashed var(--gt-kant); }
+.gt-kedja__steg:last-child { border-bottom: none; }
+.gt-kedja__nr { display: grid; place-items: center; flex: none; width: 18px; height: 18px;
+  border-radius: 50%; background: var(--gt-accent-ljus); color: var(--gt-accent-mork);
+  font-size: 10.5px; font-weight: 800; align-self: center; }
+.gt-kedja__innehall { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.gt-kedja__fraga { font-size: 12.5px; }
+.gt-kedja__lagrum { font-size: 10.5px; color: var(--gt-ink-svag); }
+.gt-kedja__svar { flex: none; font-weight: 700; font-size: 12px; text-align: right; max-width: 40%; }
+
 /* ---------- tillsynsradar ---------- */
 .gt-radarknapp { display: inline-flex; align-items: center; gap: .3rem; }
 .gt-radarknapp svg { width: 14px; height: 14px; color: var(--gt-accent); }

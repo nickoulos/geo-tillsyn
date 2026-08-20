@@ -27,6 +27,18 @@ skanningsläge över en yta i stället för en punkt:
   (bbox 157843.7,6916367.7,159523.1,6918611.2): 826 byggnader, 271 kandidater,
   topp 10 med poäng 6–7 — ALNÖ-USLAND 1:45 (båda byggnaderna) bland dem.
 
+## Resonemang — regelgraf i tunn form (2026-08-20)
+
+Svaret på "ingen svart låda" som UI: varje analysresultat bär nu ett
+`resonemang`-fält — den juridiska kedjan som nodlista (fråga, lagrum, svar),
+härledd ur redan beräknade fält i `src/geo_tillsyn/resonemang.py`. Ingen nod
+räknar något nytt; sista noden är alltid "Beslut?" med svaret »Ej fastställt«
+(handläggarens). Fall 1: datering → register → lovplikt → lovbefrielse →
+klockorna. Fall 3: lov → styrande lag → OCR-korskontroll → avvikelse →
+väsentlighet (alltid handläggarfråga) → klockor. Fall 7: zon → regim vid
+uppförandet → dispens → preskription (MÖD 2021:6). Kortet renderar kedjan som
+en numrerad "Resonemang"-sektion (SV/EN); additivt för MCP-verktygen.
+
 ## Fallback-skärmdumpar + WMS-cache (2026-08-20)
 
 Demomanusets `fallback_akt1..3.png` + `fallback_radar.png` genereras headless:
