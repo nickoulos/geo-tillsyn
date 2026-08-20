@@ -3,6 +3,48 @@
 **Datum:** 2026-07-23 · **Status:** Kopplat och verifierat till den grad som är
 möjlig utan mänsklig webbläsarinteraktion. Screencast görs manuellt.
 
+## v0.7 Fastighetsbiografi (2026-08-20)
+
+"Tesen som en bild" (se `docs/superpowers/specs/2026-08-19-fastighetsbiografi-design.md`):
+tidslinjepillen är borttagen och ersatt av en **biografi-strip** under
+kartan, panelen visar **fynden först**, och kartan berättar (auto-zoom,
+klickmarkör, skrafferat överlägg). Körinstruktionerna i "Kör demot" nedan
+gäller oförändrat.
+
+- **Backend (additivt):** `narvaro_per_ar`/`uteslutna_ar` på `/api/olovligt`,
+  `vald_byggnad_id` + vald träff först i `traffar` på `/api/strandskydd`,
+  nytt `GET /api/strandskydd/geometri` (radar-lite, aldrig ett MCP-verktyg).
+- **Biografi-strip** (`src/biografi.js` + `src/biografi-logik.mjs`, ersätter
+  `timeline.js`): fyra spår — **Verklighet** (ortofotohistorik per årgång),
+  **Register & lov** (BAL-registret mot dateringsintervallet, "avviker"-gap
+  endast vid `bal_forenligt === false`), **Rättighet** (lagregim +
+  lovbefrielser i två rader + strandskydd, ur `regler.json`) och **Klockor**
+  (rättelse/sanktion/strandskydd-preskription, endast efter klick) — över en
+  gemensam 1960→innevarande år+1-axel. Cursor-drag/klick snappar till
+  närmaste ortofotoårgång.
+- **Panelen (fynden först):** sammanfattningschips (ett per kontroll, med
+  *underlagsläge* — aldrig ett utfall), display-rubriker (22 px/800,
+  t.ex. **+90,3 m²**) med underrad, en osäkerhetschip i stället för en öppen
+  bärnstensvägg, strandskyddskortet ur fastighetsperspektiv (`vald_byggnad_id`)
+  med kandidatrad, ett eget **Beslut**-block med avsiktligt tomt fält.
+- **Kartan berättar:** auto-zoom till Fall 3-överlägget (eller en 80 m-ruta)
+  med klicktoken (skyddar mot kapplöpning vid snabba omklick), klickmarkör,
+  fyllt skrafferat överlägg, automatisk zonlager-toggle vid strandskyddsträff.
+- **Visuell polish (task 6):** lovbefrielsestaplarna (friggebod/attefallshus/
+  komplementbostadshus/komplementbyggnad) har nu en 1 px vit rand mellan
+  intilliggande perioder och en kortare etikett ("attefall 25") när den fulla
+  texten ("attefallshus 25 m²") inte får plats i stapeln — tidigare syntes
+  ingen text alls på attefall-raden, bara en dold title-tooltip.
+- **Verifieringssele:** `demo/autoklick.html` (se README.md) — headless
+  Chrome 1600×900, fyra körningar granskade av människa/Fable: tomläge,
+  komplementbyggnaden, huvudbyggnaden (+90,3 m² · +38,4 %), EN-läge
+  (UI-chrome översatt, lagrum/SFS/MÖD-referenser kvar på svenska).
+- 87/87 `npm test` gröna efter task 6-ändringarna; `npm run build` grön,
+  `node --check build/js/geotillsyn.min.js` ren.
+- En separat Tillsynsradar ("Skanna vyn"-knappen i panelhuvudet) tillkom i en
+  annan session — se radar-dokumentationen för dess status, inte beskriven
+  här.
+
 ## v0.5 UX-redesign (2026-07-30)
 
 Handläggar-UX i stället för demopanel — samma backend, samma endpoints:
